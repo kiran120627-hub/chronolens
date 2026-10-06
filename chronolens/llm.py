@@ -40,7 +40,9 @@ def load_env(path: Path = ROOT / ".env") -> None:
         line = line.strip()
         if line and not line.startswith("#") and "=" in line:
             k, v = line.split("=", 1)
-            os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+            k, v = k.strip(), v.strip().strip('"').strip("'")
+            if v and not os.environ.get(k):  # .env fills in missing/empty values (re-read on every call)
+                os.environ[k] = v
 
 
 class LLMError(RuntimeError):

@@ -150,7 +150,7 @@ with st.sidebar:
     if llm.configured:
         st.success(llm.label, icon="🔑")
     else:
-        st.warning("No LLM key — analysis works, Q&A needs LLM_API_KEY in .env", icon="⚠️")
+        st.warning("No LLM key — questions are answered by the offline rule engine", icon="⚠️")
 
 # ----------------------------------------------------------------------------- header + run
 st.markdown('<div class="cl-hero"><h1>ChronoLens</h1><p>Video understanding with temporal reasoning — detection, '
@@ -213,11 +213,13 @@ with tab_ask:
         with st.form("ask"):
             q = st.text_area("Question", value=ss.get("question", ""), height=70,
                              placeholder="e.g. What happened right before the alarm?")
-            go = st.form_submit_button("Ask", type="primary", disabled=not llm.configured)
+            mode = st.radio("Answering", ["Auto · LLM + cross-check", "Offline rules (no internet)"], horizontal=True,
+                            index=0 if llm.configured else 1, label_visibility="collapsed")
+            go = st.form_submit_button("Ask", type="primary")
         if go and q.strip():
             ss.question = q
             with st.spinner("Reasoning over the event log…"):
-                ss.qa = ask(a, q.strip(), llm)
+                ss.qa = ask(a, q.strip(), llm, mode="offline" if mode.startswith("Offline") else "auto")
             if ss.qa.timestamps:
                 seek(ss.qa.timestamps[0])
             st.rerun()
@@ -233,6 +235,8 @@ with tab_ask:
                 body += (f'<div style="display:flex;justify-content:space-between;color:#94a3b8;font-size:.8rem">'
                          f'<span>Evidence confidence</span><span>{conf}%</span></div>'
                          f'<div class="cl-meter"><div style="width:{conf}%;background:{col}"></div></div>')
+            if r.plan:
+                body += f'<div style="color:#94a3b8;font-size:.8rem;margin-top:.5rem">⚙ {html.escape(r.plan[:300])}</div>'
             st.markdown(f'<div class="cl-card">{body}</div>', unsafe_allow_html=True)
             if r.timestamps:
                 st.caption("Jump to:")

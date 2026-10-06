@@ -2,7 +2,7 @@
 
 **Score: 12.0 / 12** (judging rule: right answer + right time = 1, right answer with wrong time = 0.5; time tolerance ±1.5 s) · model gemini-3.8-flash via generativelanguage.googleapis.com
 
-Video 1:40.0 analysed in 0s · people found 3 / 3 expected · 6 re-identification links · 34 events
+Video 1:40.0 analysed in 30s · people found 3 / 3 expected · 6 re-identification links · 34 events
 
 | id | skill | question | score | answer |
 |---|---|---|---|---|

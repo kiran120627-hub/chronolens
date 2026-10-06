@@ -75,7 +75,7 @@ def main() -> None:
         sys.exit("No LLM key configured (.env)")
     t0 = time.time()
     a = analyze(ROOT / meta["video"], settings, progress=lambda f, m: print(f"  [{f:4.0%}] {m}", flush=True))
-    t_an = time.time() - t0
+    t_an = float(a.meta.get("processing_seconds", time.time() - t0))  # GPU pass time (cached runs report the original)
     people = a.identities[a.identities.kind == "person"]
     print(f"\nidentities: {list(a.identities.id)}  (expected people: 3)")
     rows = []

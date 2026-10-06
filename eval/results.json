@@ -3,7 +3,7 @@
     "score": 12.0,
     "max": 12,
     "model": "gemini-3.8-flash via generativelanguage.googleapis.com",
-    "analysis_seconds": 0.1,
+    "analysis_seconds": 29.6,
     "video_seconds": 100.0,
     "people_found": 3,
     "people_expected": 3,
@@ -66,7 +66,7 @@
       "value": null,
       "confidence": 0.87,
       "why": "subjects ['P2'] vs ['P2']; times 1:10.0, 1:06.0 vs 1:05.9",
-      "seconds": 16.6
+      "seconds": 0.0
     },
     {
       "id": "S04",
@@ -82,7 +82,7 @@
       "value": 70.0,
       "confidence": 0.91,
       "why": "times 1:10.0 vs 1:10.0",
-      "seconds": 27.0
+      "seconds": 0.0
     },
     {
       "id": "S05",
@@ -122,7 +122,7 @@
       "value": null,
       "confidence": 0.57,
       "why": "subjects ['P1'] vs ['P1']; times 0:41.0, 0:03.4, 0:17.5 vs 0:40.8",
-      "seconds": 55.9
+      "seconds": 0.0
     },
     {
       "id": "S07",
@@ -164,7 +164,7 @@
       "value": 3,
       "confidence": 0.72,
       "why": "value 3 vs 3",
-      "seconds": 48.3
+      "seconds": 0.0
     },
     {
       "id": "S09",
@@ -187,7 +187,7 @@
       ],
       "confidence": 0.72,
       "why": "subjects ['P1', 'P2'] vs ['P1', 'P2']; times 0:12.0, 0:40.6 vs 0:12.0, 0:40.6",
-      "seconds": 42.4
+      "seconds": 0.0
     },
     {
       "id": "S10",
@@ -207,7 +207,7 @@
       "value": false,
       "confidence": 0.87,
       "why": "value False vs 'no'",
-      "seconds": 38.4
+      "seconds": 0.0
     },
     {
       "id": "S11",
@@ -226,7 +226,7 @@
       "value": 14.64,
       "confidence": 0.87,
       "why": "value 14.64 vs 14.7",
-      "seconds": 24.1
+      "seconds": 0.0
     },
     {
       "id": "S12",
@@ -240,7 +240,7 @@
       "value": null,
       "confidence": 0.0,
       "why": "correctly reported not observed",
-      "seconds": 8.1
+      "seconds": 0.0
     }
   ]
 }

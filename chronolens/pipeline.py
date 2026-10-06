@@ -24,8 +24,9 @@ from .reid import build_tracklets, link_tracklets
 ROOT = Path(__file__).resolve().parent.parent
 ANALYSIS = ROOT / "analysis"
 
-PALETTE = [(66, 135, 245), (245, 66, 93), (46, 204, 113), (241, 196, 15), (155, 89, 182), (230, 126, 34),
-           (26, 188, 156), (236, 64, 122), (52, 73, 94), (149, 165, 166), (211, 84, 0), (39, 174, 96)]
+PALETTE = [  # BGR, muted so overlays read as an instrument, not a toy
+    (201, 167, 127), (80, 162, 214), (149, 191, 127), (152, 139, 201), (207, 151, 164), (127, 183, 201),
+    (192, 194, 127), (112, 135, 208), (177, 165, 154), (127, 201, 184), (160, 120, 200), (110, 170, 230)]
 
 
 @dataclass
@@ -146,7 +147,8 @@ def post_process(out: Path, meta: dict, settings: Settings, progress: Progress |
     events.to_csv(out / "events.csv", index=False)
     (out / "segments.json").write_text(json.dumps(extra, default=float))
     a = Analysis(out, meta, settings, det, identities, links, events, series, extra["segments"])
-    render_key = hashlib.sha256((out / "events.csv").read_bytes() + (out / "tracks_global.csv").read_bytes()).hexdigest()
+    render_key = hashlib.sha256(b"style-v2" + (out / "events.csv").read_bytes()
+                                + (out / "tracks_global.csv").read_bytes()).hexdigest()
     stamp = out / "annotated.key"
     if not a.annotated.exists() or not stamp.exists() or stamp.read_text() != render_key:
         progress(0.92, "Rendering annotated video")

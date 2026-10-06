@@ -228,7 +228,8 @@ def run_perception(video: str | Path, out_dir: Path, settings: Settings, progres
     np.savez_compressed(out_dir / "appearance.npz", **{
         f"{tid}__hsv": np.mean(f["hsv"], axis=0) for tid, f in feats.items() if f["hsv"]}, **{
         f"{tid}__cnn": np.mean(f["cnn"], axis=0) for tid, f in feats.items() if f["cnn"]})
-    (out_dir / "meta.json").write_text(json.dumps({**meta.__dict__, "device": device, "model": settings.model,
+    gpu = torch.cuda.get_device_name(0) if device.startswith("cuda") else "CPU"
+    (out_dir / "meta.json").write_text(json.dumps({**meta.__dict__, "device": device, "gpu": gpu, "model": settings.model,
                                                    "processing_seconds": round(time.time() - t0, 1)}, indent=2))
     progress(1.0, f"Perception done in {time.time() - t0:.0f}s")
     return meta

@@ -98,19 +98,23 @@ class LLM:
                                         sort_keys=True).encode()).hexdigest()
         path = self.cache_dir / f"{key}.json"
         if self.cache and path.exists():
-            with self._lock:
-                self.cache_hits += 1
-            return json.loads(path.read_text(encoding="utf-8"))["text"]
+            data = json.loads(path.read_text(encoding="utf-8"))
+            # an answer produced by a fallback model is only reused while the main model is unavailable
+            if data.get("model") == self.model or self.model in self.exhausted:
+                with self._lock:
+                    self.cache_hits += 1
+                return data["text"]
         if not self.configured:
             raise LLMError("No LLM API key configured. Set LLM_API_KEY in .env (see .env.example).")
         primary, last_err = self.model, None
-        text = None
+        text, used = None, primary
         for m in [primary] + [f for f in self.fallbacks if f != primary]:
             if m in self.exhausted:
                 continue
             self.model = m
             try:
                 text = self._with_retries(system, messages, temperature)
+                used = m
                 break
             except LLMError as e:
                 last_err = e
@@ -124,7 +128,7 @@ class LLM:
             raise last_err or LLMError("LLM call failed")
         if self.cache:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps({"model": self.model, "text": text}), encoding="utf-8")
+            path.write_text(json.dumps({"model": used, "text": text}), encoding="utf-8")
         return text
 
     # ------------------------------------------------------------------ transport

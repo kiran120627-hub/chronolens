@@ -1,0 +1,231 @@
+{
+  "video": "data/videos/warehouse_sim.mp4",
+  "zones": [
+    {
+      "name": "Restricted area",
+      "kind": "area",
+      "points": [
+        [
+          0.62,
+          0.62
+        ],
+        [
+          0.97,
+          0.62
+        ],
+        [
+          0.97,
+          0.99
+        ],
+        [
+          0.62,
+          0.99
+        ]
+      ]
+    },
+    {
+      "name": "Machine",
+      "kind": "activity",
+      "points": [
+        [
+          0.56,
+          0.05
+        ],
+        [
+          0.7,
+          0.05
+        ],
+        [
+          0.7,
+          0.28
+        ],
+        [
+          0.56,
+          0.28
+        ]
+      ]
+    }
+  ],
+  "ground_truth": {
+    "zone_entries": [
+      [
+        "P1",
+        11.96
+      ],
+      [
+        "P2",
+        40.62
+      ],
+      [
+        "P2",
+        65.94
+      ]
+    ],
+    "zone_exits": [
+      [
+        "P1",
+        16.56
+      ],
+      [
+        "P2",
+        46.44
+      ],
+      [
+        "P2",
+        74.84
+      ]
+    ],
+    "first_seen": {
+      "P1": 3.54,
+      "P2": 33.46,
+      "P3": 55.36
+    },
+    "last_seen": {
+      "P1": 51.56,
+      "P2": 75.34,
+      "P3": 96.4
+    },
+    "vehicle_first_seen": 25.98,
+    "vehicle_parked": [
+      30.0,
+      80.0
+    ]
+  },
+  "time_tolerance": 1.5,
+  "questions": [
+    {
+      "id": "S01",
+      "question": "Which person entered the restricted area after the delivery truck arrived, and when?",
+      "expected": {
+        "subjects": [
+          "P2"
+        ],
+        "times": [
+          40.62
+        ]
+      },
+      "skill": "order / after"
+    },
+    {
+      "id": "S02",
+      "question": "How many times did the machine stop?",
+      "expected": {
+        "value": 2,
+        "times": [
+          20.0,
+          61.0
+        ]
+      },
+      "skill": "counting over time"
+    },
+    {
+      "id": "S03",
+      "question": "What happened right before the safety alarm went off?",
+      "expected": {
+        "subjects": [
+          "P2"
+        ],
+        "times": [
+          65.94
+        ]
+      },
+      "skill": "cause & effect / before"
+    },
+    {
+      "id": "S04",
+      "question": "When did the alarm go off?",
+      "expected": {
+        "times": [
+          70.0
+        ]
+      },
+      "skill": "event time"
+    },
+    {
+      "id": "S05",
+      "question": "When did the delivery vehicle arrive and how long did it stay parked?",
+      "expected": {
+        "times": [
+          25.98
+        ],
+        "value": 50.0,
+        "value_tol": 6.0
+      },
+      "skill": "duration"
+    },
+    {
+      "id": "S06",
+      "question": "Did the first person who appeared come back later? If so, when?",
+      "expected": {
+        "subjects": [
+          "P1"
+        ],
+        "times": [
+          40.8421052631579
+        ]
+      },
+      "skill": "re-identification"
+    },
+    {
+      "id": "S07",
+      "question": "Who stood still for more than 20 seconds, and when?",
+      "expected": {
+        "subjects": [
+          "P3"
+        ],
+        "times": [
+          58.0
+        ]
+      },
+      "skill": "stationary"
+    },
+    {
+      "id": "S08",
+      "question": "How many different people appear in the video?",
+      "expected": {
+        "value": 3
+      },
+      "skill": "identity tracking"
+    },
+    {
+      "id": "S09",
+      "question": "In what order did people first enter the restricted area?",
+      "expected": {
+        "subjects": [
+          "P1",
+          "P2"
+        ],
+        "times": [
+          11.96,
+          40.62
+        ]
+      },
+      "skill": "ordering"
+    },
+    {
+      "id": "S10",
+      "question": "Did anyone enter the restricted area while the machine was stopped?",
+      "expected": {
+        "value": "no"
+      },
+      "skill": "temporal overlap"
+    },
+    {
+      "id": "S11",
+      "question": "How long in total did the second person spend inside the restricted area?",
+      "expected": {
+        "value": 14.7,
+        "value_tol": 2.5
+      },
+      "skill": "duration aggregation"
+    },
+    {
+      "id": "S12",
+      "question": "When did a dog run across the floor?",
+      "expected": {
+        "not_observed": true
+      },
+      "skill": "refuse unsupported"
+    }
+  ]
+}

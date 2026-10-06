@@ -1,0 +1,10 @@
+# PyTorch with CUDA: install first from https://pytorch.org (RTX 50-series needs the cu128 build):
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+ultralytics>=8.3
+lap>=0.5
+opencv-python-headless>=4.9
+imageio-ffmpeg>=0.5
+numpy>=1.26
+pandas>=2.1
+streamlit>=1.38
+plotly>=5.20

@@ -65,7 +65,8 @@ cp .env.example .env          # add ONE LLM key (Claude / Gemini / Groq / any Op
 python data/make_synthetic.py # renders the benchmark video + ground truth
 streamlit run app.py          # http://localhost:8502
 ```
-In the app, pick the sample or upload any video, adjust zones (area = restricted area, activity = machine),
+In the app, pick the sample or upload any video, draw zones by dragging on the frame (area = restricted area,
+activity = machine),
 click **Analyse video**, then ask questions. Every timestamp in an answer is a button that seeks the video.
 
 ### Reproduce the benchmark
@@ -120,7 +121,8 @@ Full tables: `eval/REPORT.md` (hybrid), `eval/REPORT_offline.md`, `eval/REPORT_l
 
 ## Scope note
 
-**Implemented (MVP + advanced):** GPU detection and tracking · re-identification across occlusion and re-entry ·
+**Implemented (MVP + advanced):** click-to-draw zones (box or lasso on the frame) · per-answer evidence clips
+(±3 s, playable and downloadable) · audio events · offline rule engine + LLM cross-check · GPU detection and tracking · re-identification across occlusion and re-entry ·
 deterministic event engine (11 event types) · configurable area/activity zones · LLM temporal QA with
 executed, validated queries and cited evidence · "not observed" refusals · annotated video export · interactive
 timeline · identity gallery with re-ID decisions · event log with seek · ground-truth benchmark + scorer ·

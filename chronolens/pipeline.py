@@ -236,6 +236,23 @@ def render_annotated(a: Analysis) -> Path:
     return a.annotated
 
 
+def export_clip(a: Analysis, t: float, before: float = 3.0, after: float = 3.0) -> Path | None:
+    """Short H.264 evidence clip of the annotated video around time t (cached in analysis/<id>/clips/)."""
+    start = max(0.0, t - before)
+    dur = min(a.meta["duration"] - start, before + after)
+    if dur <= 0.2:
+        return None
+    out = a.dir / "clips" / f"clip_{start:08.2f}_{dur:05.2f}.mp4"
+    if out.exists() and out.stat().st_size > 1000:
+        return out
+    out.parent.mkdir(exist_ok=True)
+    src = a.annotated if a.annotated.exists() else a.video
+    p = subprocess.run([_ffmpeg(), "-y", "-loglevel", "error", "-ss", f"{start:.2f}", "-i", str(src), "-t", f"{dur:.2f}",
+                        "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "26", "-pix_fmt", "yuv420p",
+                        "-movflags", "+faststart", str(out)], capture_output=True)
+    return out if p.returncode == 0 and out.exists() else None
+
+
 def frame_at(video: Path, t: float, width: int = 480, boxes: pd.DataFrame | None = None, meta: dict | None = None):
     """RGB still at time t (optionally with boxes for the given detections) — used as answer evidence."""
     cap = cv2.VideoCapture(str(video))

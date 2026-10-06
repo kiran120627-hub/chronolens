@@ -28,6 +28,8 @@
    score and reason).
 4. *"When did a dog run across the floor?"* → **Not observed**. "It refuses instead of hallucinating."
 
+   Open **Evidence clips** under an answer: a 6-second clip of exactly that moment, downloadable.
+
 **1:50 — Timeline tab (15 s)**
 > "Every identity's visibility, zone entries, re-identifications, machine stops and the alarm on one axis."
 
@@ -110,5 +112,6 @@ cross-check, the offline rule engine, the benchmark generator and scorer, and th
 |---|---|
 | Wi-Fi / API down or "quota" error | Switch the answer mode to **Offline rules**. Same answers for the demo questions. |
 | Analysis is slow on a judge's video | Analysis settings → Detector `yolo11n.pt`, frame rate 5 |
-| Wrong zone | Zones panel → adjust the x/y sliders → Analyse again (tracking is cached, only events recompute) |
+| Wrong zone | **Edit zones** → drag a new box on the frame → Add drawn zone → Analyse again (area zones recompute instantly) |
+| Judge brings a new video | Upload → drag a box over their "restricted area" (and an *activity* box over any machine) → Analyse |
 | App crashes | Restart `streamlit run app.py`; analyses and answers are cached on disk |

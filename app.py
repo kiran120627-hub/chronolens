@@ -12,7 +12,7 @@ import streamlit as st
 
 from chronolens.config import Settings, Zone, fmt_t
 from chronolens.llm import LLM
-from chronolens.pipeline import PALETTE, analyze, frame_at
+from chronolens.pipeline import PALETTE, analyze, export_clip, frame_at
 from chronolens.qa import ask
 
 ROOT = Path(__file__).resolve().parent
@@ -92,6 +92,66 @@ def first_frame(video: Path, zones: list[dict], width: int = 720):
     return cv2.cvtColor(f, cv2.COLOR_BGR2RGB)
 
 
+def draw_zones_ui(video: Path) -> None:
+    """Drag a box or lasso any shape on the frame, name it, add it as a zone."""
+    import numpy as np
+    import plotly.graph_objects as go
+
+    cap = cv2.VideoCapture(str(video))
+    cap.set(cv2.CAP_PROP_POS_MSEC, 1000)
+    ok, f = cap.read()
+    cap.release()
+    if not ok:
+        st.warning("Could not read a frame from the video.")
+        return
+    H0, W0 = f.shape[:2]
+    scale = 960 / W0
+    img = cv2.cvtColor(cv2.resize(f, (960, int(H0 * scale))), cv2.COLOR_BGR2RGB)
+    h, w = img.shape[:2]
+    fig = go.Figure(go.Image(z=img, hoverinfo="skip"))
+    gx, gy = np.meshgrid(np.linspace(0, w, 64), np.linspace(0, h, 36))
+    fig.add_trace(go.Scatter(x=gx.ravel(), y=gy.ravel(), mode="markers", marker=dict(size=6, opacity=0.01),
+                             hoverinfo="skip", showlegend=False))  # invisible grid so box/lasso selections register
+    for z in ss.zones:
+        xs = [p[0] * w for p in z["points"]] + [z["points"][0][0] * w]
+        ys = [p[1] * h for p in z["points"]] + [z["points"][0][1] * h]
+        col = "#ef4444" if z["kind"] == "area" else "#f59e0b"
+        fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines", line=dict(color=col, width=3), fill="toself",
+                                 fillcolor="rgba(239,68,68,.15)" if z["kind"] == "area" else "rgba(245,158,11,.15)",
+                                 hoverinfo="text", text=z["name"], showlegend=False))
+        fig.add_annotation(x=xs[0], y=ys[0], text=z["name"], showarrow=False, xanchor="left", yanchor="top",
+                           font=dict(color=col, size=14))
+    fig.update_layout(dragmode="select", height=420, margin=dict(l=0, r=0, t=30, b=0),
+                      xaxis=dict(visible=False, range=[0, w], constrain="domain"),
+                      yaxis=dict(visible=False, range=[h, 0], scaleanchor="x", constrain="domain"))
+    ev = st.plotly_chart(fig, on_select="rerun", selection_mode=("box", "lasso"), key="zone_fig",
+                         use_container_width=True, config={"modeBarButtonsToAdd": ["select2d", "lasso2d"]})
+    poly = None
+    sel = getattr(ev, "selection", None) or (ev.get("selection") if isinstance(ev, dict) else None)
+    if sel:
+        lasso = sel.get("lasso") or []
+        box = sel.get("box") or []
+        if lasso:
+            poly = list(zip(lasso[-1]["x"], lasso[-1]["y"]))
+        elif box:
+            (x0, x1), (y0, y1) = sorted(box[-1]["x"]), sorted(box[-1]["y"])
+            poly = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+    c1, c2, c3 = st.columns([2, 1, 1])
+    name = c1.text_input("Zone name", value=f"Zone {len(ss.zones) + 1}", key=f"new_zone_name_{len(ss.zones)}")
+    kind = c2.selectbox("Type", ["area", "activity"], key=f"new_zone_kind_{len(ss.zones)}",
+                        help="area = log people entering/leaving · activity = detect motion stopping (machines)")
+    if c3.button("➕ Add drawn zone", disabled=poly is None, use_container_width=True):
+        pts = [(round(min(max(x / w, 0), 1), 4), round(min(max(y / h, 0), 1), 4)) for x, y in poly]
+        if len(pts) > 40:  # thin long lasso paths
+            pts = pts[:: max(1, len(pts) // 40)]
+        ss.zones.append({"name": name.strip() or f"Zone {len(ss.zones) + 1}", "kind": kind, "points": pts})
+        ss.zone_rev = ss.get("zone_rev", 0) + 1
+        st.rerun()
+    st.caption("Drag a box on the frame to select an area (pick the lasso tool in the toolbar for any shape), "
+               "name it, click **Add drawn zone**, then **Analyse video**. "
+               + ("✅ Shape selected." if poly else "No shape selected yet."))
+
+
 def seek(t: float):
     ss.seek = max(0.0, float(t) - 1.0)
 
@@ -117,17 +177,22 @@ with st.sidebar:
 
     with st.expander("Zones", expanded=src != "Sample · warehouse (ground truth)"):
         st.caption("Area zones log enter/exit. Activity zones watch for motion stopping (e.g. a machine).")
+        rev = ss.get("zone_rev", 0)
         for i, z in enumerate(ss.zones):
             x1, y1, x2, y2 = rect_of(z)
             c1, c2 = st.columns([2, 1])
-            z["name"] = c1.text_input("name", z["name"], key=f"zn{i}", label_visibility="collapsed")
-            z["kind"] = c2.selectbox("kind", ["area", "activity"], index=0 if z["kind"] == "area" else 1, key=f"zk{i}",
-                                     label_visibility="collapsed")
-            xr = st.slider("x range", 0.0, 1.0, (float(x1), float(x2)), 0.01, key=f"zx{i}")
-            yr = st.slider("y range", 0.0, 1.0, (float(y1), float(y2)), 0.01, key=f"zy{i}")
-            z["points"] = [(xr[0], yr[0]), (xr[1], yr[0]), (xr[1], yr[1]), (xr[0], yr[1])]
-            if st.button("Remove zone", key=f"zr{i}"):
+            z["name"] = c1.text_input("name", z["name"], key=f"zn{i}_{rev}", label_visibility="collapsed")
+            z["kind"] = c2.selectbox("kind", ["area", "activity"], index=0 if z["kind"] == "area" else 1,
+                                     key=f"zk{i}_{rev}", label_visibility="collapsed")
+            if len(z["points"]) == 4:
+                xr = st.slider("x range", 0.0, 1.0, (float(x1), float(x2)), 0.01, key=f"zx{i}_{rev}")
+                yr = st.slider("y range", 0.0, 1.0, (float(y1), float(y2)), 0.01, key=f"zy{i}_{rev}")
+                z["points"] = [(xr[0], yr[0]), (xr[1], yr[0]), (xr[1], yr[1]), (xr[0], yr[1])]
+            else:
+                st.caption(f"custom shape · {len(z['points'])} points")
+            if st.button("Remove zone", key=f"zr{i}_{rev}"):
                 ss.zones.pop(i)
+                ss.zone_rev = rev + 1
                 st.rerun()
             st.divider()
         if st.button("+ Add zone"):
@@ -173,11 +238,10 @@ if run:
 
 a = ss.analysis
 if a is None:
-    c1, c2 = st.columns([1.3, 1])
+    c1, c2 = st.columns([1.6, 1])
     with c1:
-        img = first_frame(video, ss.zones)
-        if img is not None:
-            st.image(img, caption="Zones preview — adjust them in the sidebar, then click Analyse video")
+        st.markdown("#### ✏️ Draw zones on the video")
+        draw_zones_ui(video)
     with c2:
         st.markdown("#### How it works")
         st.markdown("1. **Detect & track** every person, vehicle and object (YOLO11 + BoT-SORT, GPU).\n"
@@ -196,6 +260,9 @@ k2.metric("People", int((a.identities.kind == "person").sum()) if len(a.identiti
 k3.metric("Vehicles / objects", int((a.identities.kind != "person").sum()) if len(a.identities) else 0)
 k4.metric("Events", len(a.events))
 k5.metric("Re-ID links", len(a.links))
+
+with st.expander("✏️ Edit zones (then click Analyse video again — new area zones are instant, activity zones re-run tracking)"):
+    draw_zones_ui(video)
 
 tab_ask, tab_tl, tab_ids, tab_ev, tab_bench = st.tabs(["Ask", "Timeline", "Identities", "Event log", "Benchmark"])
 
@@ -271,6 +338,15 @@ with tab_ask:
                     fcols = st.columns(len(frames))
                     for (t, img), c in zip(frames, fcols):
                         c.image(img, caption=f"evidence @ {fmt_t(t)}", use_container_width=True)
+            if r.timestamps:
+                with st.expander("Evidence clips (±3 s around each cited moment)", expanded=False):
+                    ccols = st.columns(min(3, len(r.timestamps)))
+                    for i, (t, c) in enumerate(zip(r.timestamps[:3], ccols)):
+                        clip = export_clip(a, t)
+                        if clip:
+                            c.video(str(clip))
+                            c.download_button(f"⬇ clip @ {fmt_t(t)}", clip.read_bytes(), file_name=clip.name,
+                                              mime="video/mp4", key=f"clip{i}", use_container_width=True)
             with st.expander("How this answer was computed"):
                 if r.plan:
                     st.write(r.plan)

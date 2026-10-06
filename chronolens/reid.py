@@ -56,6 +56,8 @@ def build_tracklets(det: pd.DataFrame, settings: Settings) -> tuple[dict[int, Tr
         dur = g.t.iloc[-1] - g.t.iloc[0]
         if dur < settings.min_track_seconds and len(g) < 4:
             continue  # flicker / false positive
+        if dur < 3.0 and g.conf.mean() < 0.40:
+            continue  # short AND weak: reflections, posters, faint shapes inside vehicles
         cls = g.cls.mode().iloc[0]
         f, l = g.iloc[0], g.iloc[-1]
         out[int(tid)] = Tracklet(int(tid), cls, kind_of(cls), float(f.t), float(l.t), len(g),

@@ -29,7 +29,7 @@ ZONE = [(0.62, 0.62), (0.97, 0.62), (0.97, 0.99), (0.62, 0.99)]  # restricted ar
 MACHINE = (0.56, 0.05, 0.70, 0.28)
 LAMP = (0.90, 0.05, 0.96, 0.15)
 PILLAR = (0.44, 0.0, 0.49, 1.0)
-MACHINE_STOPS = [(20.0, 27.0), (61.0, 66.0)]
+MACHINE_STOPS = [(20.0, 27.0), (60.0, 64.0)]  # P2 re-enters the zone at ~66 s: clearly AFTER the restart
 ALARM = (70.0, 74.0)
 
 
@@ -209,6 +209,7 @@ def main() -> None:
     ff.stdin.close()
     ff.wait()
 
+    add_soundtrack(OUT_VIDEO)
     gt = ground_truth()
     entries = gt["zone_entries"]
     p2_entries = [t for pid, t in entries if pid == "P2"]
@@ -237,6 +238,8 @@ def main() -> None:
          "expected": {"value": "no"}, "skill": "temporal overlap"},
         {"id": "S11", "question": "How long in total did the second person spend inside the restricted area?",
          "expected": {"value": round(p2_time, 1), "value_tol": 2.5}, "skill": "duration aggregation"},
+        {"id": "S13", "question": "Was there any loud crash or bang? When?",
+         "expected": {"times": [CRASH]}, "skill": "audio event"},
         {"id": "S12", "question": "When did a dog run across the floor?",
          "expected": {"not_observed": True}, "skill": "refuse unsupported"},
     ]
@@ -249,6 +252,26 @@ def main() -> None:
     OUT_Q.write_text(json.dumps(meta, indent=2))
     print("wrote", OUT_VIDEO, "and", OUT_Q)
     print(json.dumps(gt, indent=1))
+
+
+CRASH = 35.0
+
+
+def add_soundtrack(video: Path) -> None:
+    """Room tone + a beeping 1 kHz alarm during ALARM + a crash (noise burst) at CRASH; muxed into the mp4."""
+    sr = 16000
+    t = np.arange(int(DUR * sr)) / sr
+    rng = np.random.default_rng(0)
+    audio = 0.01 * rng.standard_normal(len(t)) + 0.006 * np.sin(2 * np.pi * 120 * t)  # hum
+    beep = (t >= ALARM[0]) & (t < ALARM[1]) & ((t * 4) % 1 < 0.6)
+    audio[beep] += 0.45 * np.sin(2 * np.pi * 1000 * t[beep])
+    c0, c1 = int(CRASH * sr), int((CRASH + 0.5) * sr)
+    audio[c0:c1] += 0.6 * rng.standard_normal(c1 - c0) * np.exp(-np.linspace(0, 5, c1 - c0))
+    pcm = (np.clip(audio, -1, 1) * 32767).astype(np.int16).tobytes()
+    tmp = video.with_suffix(".tmp.mp4")
+    subprocess.run([_ffmpeg(), "-y", "-loglevel", "error", "-i", str(video), "-f", "s16le", "-ar", str(sr), "-ac", "1",
+                    "-i", "-", "-c:v", "copy", "-c:a", "aac", "-b:a", "96k", "-shortest", str(tmp)], input=pcm, check=True)
+    tmp.replace(video)
 
 
 def _ffmpeg():

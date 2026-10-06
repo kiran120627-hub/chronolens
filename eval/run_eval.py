@@ -47,8 +47,10 @@ def grade(q: dict, r, tol: float) -> tuple[float, str, bool, bool]:
     if "value" in exp:
         v = exp["value"]
         if isinstance(v, str):
-            text = f"{r.value} {r.answer}"
-            hit = bool(NO.search(text)) if v == "no" else bool(YES.search(text))
+            # strict: the explicit value, else the answer's opening words, must say yes/no
+            head = str(r.value).lower() if str(r.value).lower() in ("yes", "no", "true", "false") else r.answer[:25].lower()
+            said_no = head in ("no", "false") or bool(re.match(r"\W*(no|nobody|no one|none)", head))
+            hit = said_no if v == "no" else (not said_no and bool(re.match(r"\W*(yes|true)", head)))
             ok &= hit
         else:
             try:
@@ -70,9 +72,11 @@ def grade(q: dict, r, tol: float) -> tuple[float, str, bool, bool]:
 def main() -> None:
     meta = json.loads((ROOT / "eval" / "questions_sim.json").read_text())
     settings = Settings(zones=[Zone(z["name"], [tuple(p) for p in z["points"]], z["kind"]) for z in meta["zones"]])
+    offline = "--offline" in sys.argv
+    hybrid = "--auto" in sys.argv
     llm = LLM.from_env()
-    if not llm.configured:
-        sys.exit("No LLM key configured (.env)")
+    if not llm.configured and not offline:
+        sys.exit("No LLM key configured (.env) - or run with --offline")
     t0 = time.time()
     a = analyze(ROOT / meta["video"], settings, progress=lambda f, m: print(f"  [{f:4.0%}] {m}", flush=True))
     t_an = float(a.meta.get("processing_seconds", time.time() - t0))  # GPU pass time (cached runs report the original)
@@ -82,7 +86,7 @@ def main() -> None:
     for q in meta["questions"]:
         t1 = time.time()
         try:
-            r = ask(a, q["question"], llm)
+            r = ask(a, q["question"], llm, mode="offline" if offline else ("auto" if hybrid else "llm"))
         except Exception as e:  # noqa: BLE001 - one failed call must not stop the benchmark
             from chronolens.qa import QAResult
             r = QAResult(question=q["question"], status="error", error=str(e)[:300])
@@ -96,17 +100,19 @@ def main() -> None:
     summary = {"score": total, "max": len(rows), "model": llm.label, "analysis_seconds": round(t_an, 1),
                "video_seconds": a.meta["duration"], "people_found": len(people), "people_expected": 3,
                "reid_links": len(a.links), "events": len(a.events)}
-    (ROOT / "eval" / "results.json").write_text(json.dumps({"summary": summary, "rows": rows}, indent=2, default=str))
+    label = "offline rule engine (no LLM)" if offline else (f"hybrid: {llm.label} + rule engine" if hybrid else llm.label)
+    summary["model"] = label
+    (ROOT / "eval" / ("results_offline.json" if offline else "results_auto.json" if hybrid else "results.json")).write_text(json.dumps({"summary": summary, "rows": rows}, indent=2, default=str))
     lines = ["# Benchmark — synthetic warehouse video with exact ground truth", "",
              f"**Score: {total:.1f} / {len(rows)}** (judging rule: right answer + right time = 1, right answer with "
-             f"wrong time = 0.5; time tolerance ±{meta['time_tolerance']} s) · model {llm.label}", "",
+             f"wrong time = 0.5; time tolerance ±{meta['time_tolerance']} s) · {label}", "",
              f"Video {fmt_t(a.meta['duration'])} analysed in {t_an:.0f}s · people found {len(people)} / 3 expected · "
              f"{len(a.links)} re-identification links · {len(a.events)} events", "",
              "| id | skill | question | score | answer |", "|---|---|---|---|---|"]
     for r in rows:
         icon = "✅" if r["score"] == 1 else ("🟡" if r["score"] == 0.5 else "❌")
         lines.append(f"| {r['id']} | {r['skill']} | {r['question']} | {icon} {r['score']} | {r['answer'][:140]} |")
-    (ROOT / "eval" / "REPORT.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (ROOT / "eval" / ("REPORT_offline.md" if offline else "REPORT.md" if hybrid else "REPORT_llm_only.md")).write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"\nSCORE {total:.1f}/{len(rows)}")
 
 

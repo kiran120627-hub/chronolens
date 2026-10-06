@@ -113,7 +113,7 @@
         "value": 2,
         "times": [
           20.0,
-          61.0
+          60.0
         ]
       },
       "skill": "counting over time"
@@ -218,6 +218,16 @@
         "value_tol": 2.5
       },
       "skill": "duration aggregation"
+    },
+    {
+      "id": "S13",
+      "question": "Was there any loud crash or bang? When?",
+      "expected": {
+        "times": [
+          35.0
+        ]
+      },
+      "skill": "audio event"
     },
     {
       "id": "S12",

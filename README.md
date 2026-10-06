@@ -84,22 +84,39 @@ Twelve questions cover ordering, cause and effect, counting, duration, re-identi
 unanswerable trap. They are scored with the problem statement's rule: right answer and right time (±1.5 s) = 1,
 right answer with the wrong time = 0.5.
 
-### Result
+### Result (13 questions, judging rule, ±1.5 s)
 
-**12 / 12** on the benchmark (all answers correct, all timestamps within ±1.5 s), with Gemini 3.x Flash
-(free tier). The 100-second video is analysed in about 28 s on an RTX 5070 Laptop GPU. Perception alone, before
-any LLM is involved, recovers the scripted truth:
+| answering mode | score | notes |
+|---|---|---|
+| **hybrid (default): LLM + deterministic cross-check** | **13 / 13** | the rule engine caught a wrong "0 times" from a weak fallback model and replaced it with the evidence |
+| **offline rule engine (no internet, no LLM)** | **13 / 13** | answers counts, times, before/after, ordering, loitering, returns, sounds and time-in-zone from the event log |
+| LLM only (Gemini 3.8 Flash) | 12 / 12 | first benchmark version without the audio question |
+| LLM only (free-tier fallback "lite" models) | 11 / 13 | why the cross-check exists |
+
+The 100-second benchmark video is analysed in about 30 s on an RTX 5070 Laptop GPU; a **10-minute video in 2 min 15 s**
+(the frame rate is lowered automatically for long clips). Perception alone, before any LLM, recovers the scripted truth:
 
 | ground truth | ChronoLens event log |
 |---|---|
-| machine stops at 20.0 s and 61.0 s | 0:20.1 and 1:01.0 |
-| alarm at 70.0 s | 1:10.0 |
+| machine stops at 20.0 s and 60.0 s | 0:20.1 and 1:00.1 |
+| alarm (beeping tone + flashing light) at 70.0 s | 1:10.0, from both audio and video |
+| crash sound at 35.0 s | 0:35.0 (audio) |
 | P2 leaves zone at 46.44 s / 74.84 s | 0:46.4 / 1:14.9 |
-| loiterer still 58–92 s | 0:57.7–1:33.3 |
+| loiterer still 58–92 s | 0:57.6–1:33.4 |
 | 3 people (one leaves & returns, one crosses behind a pillar 3×, one is a mirrored look-alike) | 3 identities, all re-ID links correct |
 
-Full table: `eval/REPORT.md`. The LLM client automatically falls back across models when a free-tier daily quota
-(20 requests per model) or an overload (HTTP 503) is hit, and answers are cached, so a demo never stalls.
+Full tables: `eval/REPORT.md` (hybrid), `eval/REPORT_offline.md`, `eval/REPORT_llm_only.md`.
+
+### Reliability features
+* **Cross-check:** when the deterministic rule engine also understands a question, its answer is compared with the
+  LLM's (values and key timestamps). If they disagree, the evidence-backed rule answer is shown and the disagreement
+  is reported. "Not observed" from the LLM is overridden when the rule engine finds supporting events.
+* **Offline mode:** no internet or no quota still gives exact answers for common questions.
+* **Model fallback:** HTTP 503/429 (overload / free-tier daily quota) switches across several models automatically,
+  and responses are cached, so a live demo never stalls.
+* **Audio events:** loud sounds and alarm-like tones (sirens, beepers) from the soundtrack, with an adaptive threshold.
+* **Noise filters:** tracks that are both short (< 3 s) and low-confidence are dropped (reflections, faint shapes
+  behind glass).
 
 ## Scope note
 

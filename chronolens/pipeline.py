@@ -76,6 +76,7 @@ def analyze(video: str | Path, settings: Settings, progress: Progress | None = N
             llm=None) -> Analysis:
     progress = progress or (lambda f, m: None)
     video = Path(video).resolve()
+    settings = auto_tune(video, settings, progress)
     out = ANALYSIS / f"{video.stem[:40]}-{video_key(video, settings)}"
     out.mkdir(parents=True, exist_ok=True)
     (out / "settings.json").write_text(json.dumps(settings.to_dict(), indent=2, default=str))
@@ -83,6 +84,20 @@ def analyze(video: str | Path, settings: Settings, progress: Progress | None = N
         run_perception(video, out, settings, lambda f, m: progress(0.05 + 0.75 * f, m))
     meta = json.loads((out / "meta.json").read_text())
     return post_process(out, meta, settings, progress, llm=llm)
+
+
+def auto_tune(video: Path, settings: Settings, progress: Progress) -> Settings:
+    """Long videos: lower the sampling rate so a 10-minute clip still finishes in a few minutes."""
+    from dataclasses import replace
+
+    from .perception import probe
+
+    dur = probe(video, settings.target_fps).duration
+    cap = 10.0 if dur <= 300 else 6.0 if dur <= 900 else 4.0 if dur <= 1800 else 2.0
+    if settings.target_fps > cap:
+        progress(0.01, f"Long video ({fmt_t(dur)}): analysing at {cap:g} samples/s instead of {settings.target_fps:g}")
+        return replace(settings, target_fps=cap)
+    return settings
 
 
 def post_process(out: Path, meta: dict, settings: Settings, progress: Progress | None = None, llm=None) -> Analysis:
@@ -98,6 +113,20 @@ def post_process(out: Path, meta: dict, settings: Settings, progress: Progress |
     det = det.dropna(subset=["gid"])
     progress(0.88, "Building the event log")
     events, extra = build_events(det, identities, series, meta, settings, links)
+    from .audio import audio_events, audio_series
+
+    aud_path = out / "audio.csv"
+    if not aud_path.exists():
+        audio_series(Path(meta["path"])).to_csv(aud_path, index=False)
+    aud = pd.read_csv(aud_path)
+    snd = audio_events(aud)
+    if snd:
+        events = pd.concat([events.drop(columns=["id", "when"]), pd.DataFrame(snd)], ignore_index=True)
+        events = events.sort_values(["start", "type"]).reset_index(drop=True)
+        events.insert(0, "id", [f"E{i + 1:03d}" for i in range(len(events))])
+        events["when"] = events.apply(lambda r: fmt_t(r.start) if r.duration == 0 else f"{fmt_t(r.start)}–{fmt_t(r.end)}",
+                                      axis=1)
+    extra["audio"] = {"has_audio": not aud.empty, "sound_events": len(snd)}
     if settings.captions_every > 0 and llm is not None and llm.configured:
         from .captions import caption_keyframes
 
@@ -148,14 +177,21 @@ def render_annotated(a: Analysis) -> Path:
     sampled = np.array(sorted(by_frame))
     colours = {gid: PALETTE[i % len(PALETTE)] for i, gid in enumerate(sorted(det.gid.unique()))}
     ev = a.events
-    banners = ev[ev.type.isin(["zone_enter", "zone_exit", "reappear", "activity_stop", "sudden_change", "interaction"])]
+    banners = ev[ev.type.isin(["zone_enter", "zone_exit", "reappear", "activity_stop", "sudden_change", "interaction",
+                               "sound"])]
+    skip = 1 if meta["duration"] <= 180 else 2 if meta["duration"] <= 900 else 4  # long videos: lighter output
     proc = subprocess.Popen([_ffmpeg(), "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "bgr24",
-                             "-s", f"{w}x{h}", "-r", f"{fps:.3f}", "-i", "-", "-an", "-c:v", "libx264", "-preset",
+                             "-s", f"{w}x{h}", "-r", f"{fps / skip:.3f}", "-i", "-", "-an", "-c:v", "libx264", "-preset",
                              "veryfast", "-crf", "26", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
                              str(a.annotated)], stdin=subprocess.PIPE)
     cap = cv2.VideoCapture(str(a.video))
     idx = 0
     while True:
+        if idx % skip:
+            if not cap.grab():
+                break
+            idx += 1
+            continue
         ok, frame = cap.read()
         if not ok:
             break

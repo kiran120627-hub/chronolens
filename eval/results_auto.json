@@ -1,8 +1,8 @@
 {
   "summary": {
-    "score": 11.0,
+    "score": 13.0,
     "max": 13,
-    "model": "gemini-3.8-flash via generativelanguage.googleapis.com",
+    "model": "hybrid: gemini-3.8-flash via generativelanguage.googleapis.com + rule engine",
     "analysis_seconds": 25.9,
     "video_seconds": 100.0,
     "people_found": 3,
@@ -16,27 +16,32 @@
       "skill": "order / after",
       "question": "Which person entered the restricted area after the delivery truck arrived, and when?",
       "score": 1.0,
-      "answer": "P2 entered the Restricted area at 0:40.6, after the delivery truck arrived at 0:26.5.",
+      "answer": "After the delivery truck arrived at 26.48s (event E007), P2 entered the Restricted area at 40.64s (event E015), and P2 entered the Restricted area at 66.0s (event E027).",
       "status": "answered",
       "timestamps": [
+        26.48,
         40.64,
-        26.48
+        66.0
       ],
       "subjects": [
         "P2",
+        "P2",
         "V1"
       ],
-      "value": null,
-      "confidence": 0.79,
-      "why": "subjects ['P2'] vs ['P2']; times 0:40.6, 0:26.5 vs 0:40.6",
-      "seconds": 8.7
+      "value": [
+        "P2",
+        "P2"
+      ],
+      "confidence": 0.93,
+      "why": "subjects ['P2', 'P2'] vs ['P2']; times 0:26.5, 0:40.6, 1:06.0 vs 0:40.6",
+      "seconds": 0.0
     },
     {
       "id": "S02",
       "skill": "counting over time",
       "question": "How many times did the machine stop?",
       "score": 1.0,
-      "answer": "The machine stopped 2 times: at 0:20.1 (event E006) and at 1:00.1 (event E023).",
+      "answer": "It stopped 2 time(s): 0:20.1\u20130:27.0, 1:00.1\u20131:04.0.",
       "status": "answered",
       "timestamps": [
         20.08,
@@ -46,65 +51,69 @@
       "value": 2,
       "confidence": 1.0,
       "why": "value 2 vs 2; times 0:20.1, 1:00.1 vs 0:20.0, 1:00.0",
-      "seconds": 4.0
+      "seconds": 0.0
     },
     {
       "id": "S03",
       "skill": "cause & effect / before",
       "question": "What happened right before the safety alarm went off?",
       "score": 1.0,
-      "answer": "Right before the safety alarm and red light went off at 1:10.0 (E028, E029), motion in the Machine resumed (activity_start E025 at 1:04.0), P2 was inside the Restricted area (E026, entering at 1:06.0), and V1 was untouched (E024).",
+      "answer": "Right before the safety alarm went off at 1:10.0, P2 entered the Restricted area at 1:06.0 and was inside the zone during the alarm.",
       "status": "answered",
       "timestamps": [
         70.0,
-        66.0,
-        64.0
+        66.0
       ],
       "subjects": [
         "P2"
       ],
       "value": null,
-      "confidence": 0.87,
-      "why": "subjects ['P2'] vs ['P2']; times 1:10.0, 1:06.0, 1:04.0 vs 1:05.9",
-      "seconds": 3.3
+      "confidence": 0.97,
+      "why": "subjects ['P2'] vs ['P2']; times 1:10.0, 1:06.0 vs 1:05.9",
+      "seconds": 0.0
     },
     {
       "id": "S04",
       "skill": "event time",
       "question": "When did the alarm go off?",
       "score": 1.0,
-      "answer": "The alarm went off at 1:10.0 (events: E028, E029).",
+      "answer": "The alarm went off starting at 1:10.0 (events: E028, E029).",
       "status": "answered",
       "timestamps": [
         70.0,
         70.0
       ],
       "subjects": [],
-      "value": 70.0,
+      "value": null,
       "confidence": 1.0,
       "why": "times 1:10.0, 1:10.0 vs 1:10.0",
-      "seconds": 21.2
+      "seconds": 0.0
     },
     {
       "id": "S05",
       "skill": "duration",
       "question": "When did the delivery vehicle arrive and how long did it stay parked?",
-      "score": 0.0,
-      "answer": "",
-      "status": "error",
-      "timestamps": [],
-      "subjects": [],
-      "value": null,
-      "confidence": 0.0,
-      "why": "no answer (error)",
-      "seconds": 6.1
+      "score": 1.0,
+      "answer": "The delivery vehicle (V1, bus) arrived at 0:26.5 (event E007) and stayed parked/stationary for 51.6 seconds, from 0:29.8 to 1:21.4 (event E009).",
+      "status": "answered",
+      "timestamps": [
+        26.48,
+        29.76
+      ],
+      "subjects": [
+        "V1"
+      ],
+      "value": 51.6,
+      "confidence": 0.9,
+      "why": "value 51.6 vs 50.0; times 0:26.5, 0:29.8 vs 0:26.0",
+      "seconds": 0.0
     },
     {
       "id": "S06",
       "skill": "re-identification",
       "question": "Did the first person who appeared come back later? If so, when?",
       "score": 1.0,
-      "answer": "Yes, the first person to appear (P1, entering at 0:03.4) came back later. They reappeared at 0:41.0 (event E016).",
+      "answer": "Yes, the first person who appeared (P1) came back later at 0:41.0.",
       "status": "answered",
       "timestamps": [
         40.96,
@@ -114,48 +123,44 @@
         "P1"
       ],
       "value": "yes",
-      "confidence": 0.67,
+      "confidence": 0.81,
       "why": "subjects ['P1'] vs ['P1']; times 0:41.0, 0:03.4 vs 0:40.8",
-      "seconds": 3.1
+      "seconds": 0.0
     },
     {
       "id": "S07",
       "skill": "stationary",
       "question": "Who stood still for more than 20 seconds, and when?",
       "score": 1.0,
-      "answer": "V1 (bus) stood still from 0:29.8 to 1:21.4 and P3 stood still from 0:57.6 to 1:33.4.",
+      "answer": "The following subjects stood still for more than 20 seconds: V1 stood still from 0:29.8 to 1:21.4 (51.6s); P3 stood still from 0:57.6 to 1:33.4 (35.8s)",
       "status": "answered",
       "timestamps": [
         29.76,
-        81.36,
-        57.6,
-        93.44
+        57.6
       ],
       "subjects": [
-        "P3",
-        "V1"
+        "V1",
+        "P3"
       ],
       "value": [
         51.599999999999994,
         35.839999999999996
       ],
-      "confidence": 0.93,
-      "why": "subjects ['P3'] vs ['P3']; times 0:29.8, 1:21.4, 0:57.6, 1:33.4 vs 0:58.0",
-      "seconds": 2.5
+      "confidence": 1.0,
+      "why": "subjects ['P3'] vs ['P3']; times 0:29.8, 0:57.6 vs 0:58.0",
+      "seconds": 0.0
     },
     {
       "id": "S08",
       "skill": "identity tracking",
       "question": "How many different people appear in the video?",
       "score": 1.0,
-      "answer": "There are 3 different people that appear in the video (P1, P2, P3), first appearing starting around 0:03.4.",
+      "answer": "There are 3 different people that appear in the video: P1, P2, P3, appearing at 3.44, 33.44, 55.52s respectively.",
       "status": "answered",
       "timestamps": [
-        96.4,
-        80.64,
-        75.36,
-        74.88,
-        66.0
+        3.44,
+        33.44,
+        55.52
       ],
       "subjects": [
         "P1",
@@ -163,76 +168,80 @@
         "P3"
       ],
       "value": 3,
-      "confidence": 0.71,
+      "confidence": 0.81,
       "why": "value 3 vs 3",
-      "seconds": 1.8
+      "seconds": 0.0
     },
     {
       "id": "S09",
       "skill": "ordering",
       "question": "In what order did people first enter the restricted area?",
       "score": 1.0,
-      "answer": "The people entered the Restricted area in the following order: P1, P2. P1 entered at 0:12.0 (E003), and P2 entered at 0:12.0 (E015/E027).",
+      "answer": "People entered the Restricted area in the following order: P1 at 0:12.0, P2 at 0:40.6, P2 at 1:06.0",
       "status": "answered",
       "timestamps": [
         12.0,
-        12.0,
         40.64,
-        40.64,
-        66.0,
         66.0
       ],
       "subjects": [
         "P1",
+        "P2",
         "P2"
       ],
       "value": [
         "P1",
+        "P2",
         "P2"
       ],
-      "confidence": 0.71,
-      "why": "subjects ['P1', 'P2'] vs ['P1', 'P2']; times 0:12.0, 0:12.0, 0:40.6, 0:40.6 vs 0:12.0, 0:40.6",
-      "seconds": 2.1
+      "confidence": 0.81,
+      "why": "subjects ['P1', 'P2', 'P2'] vs ['P1', 'P2']; times 0:12.0, 0:40.6, 1:06.0 vs 0:12.0, 0:40.6",
+      "seconds": 0.0
     },
     {
       "id": "S10",
       "skill": "temporal overlap",
       "question": "Did anyone enter the restricted area while the machine was stopped?",
-      "score": 0.0,
-      "answer": "No one entered the restricted area while the machine was stopped.",
-      "status": "not_observed",
-      "timestamps": [],
+      "score": 1.0,
+      "answer": "No, nobody entered the restricted area while the machine was stopped.",
+      "status": "answered",
+      "timestamps": [
+        20.08,
+        60.08
+      ],
       "subjects": [],
       "value": "no",
-      "confidence": 0.0,
-      "why": "no answer (not_observed)",
-      "seconds": 2.8
+      "confidence": 1.0,
+      "why": "value 'no' vs 'no'",
+      "seconds": 0.0
     },
     {
       "id": "S11",
       "skill": "duration aggregation",
       "question": "How long in total did the second person spend inside the restricted area?",
       "score": 1.0,
-      "answer": "The second person (P2) spent a total of 14.6 seconds inside the Restricted area across 2 visit(s) starting at timestamps 0:40.6, 1:06.0.",
+      "answer": "P2 spent a total of 14.6 seconds inside the Restricted area across two intervals: from 0:40.6 to 0:46.4 and from 1:06.0 to 1:14.9.",
       "status": "answered",
       "timestamps": [
-        40.64,
-        66.0
+        74.88,
+        66.0,
+        46.4,
+        40.64
       ],
       "subjects": [
         "P2"
       ],
       "value": 14.6,
-      "confidence": 0.87,
+      "confidence": 0.97,
       "why": "value 14.6 vs 14.7",
-      "seconds": 2.3
+      "seconds": 0.0
     },
     {
       "id": "S13",
       "skill": "audio event",
       "question": "Was there any loud crash or bang? When?",
       "score": 1.0,
-      "answer": "Yes, there was a loud sound (bang / crash / shout) at 0:35.0 (event E012).",
+      "answer": "Yes, there was a loud sound (bang / crash / shout) at 0:35.0.",
       "status": "answered",
       "timestamps": [
         35.0
@@ -241,21 +250,21 @@
       "value": "yes",
       "confidence": 1.0,
       "why": "times 0:35.0 vs 0:35.0",
-      "seconds": 3.4
+      "seconds": 0.0
     },
     {
       "id": "S12",
       "skill": "refuse unsupported",
       "question": "When did a dog run across the floor?",
       "score": 1.0,
-      "answer": "No dog was observed running across the floor in the provided event logs.",
+      "answer": "No dog was observed running across the floor in the video.",
       "status": "not_observed",
       "timestamps": [],
       "subjects": [],
-      "value": 0,
+      "value": null,
       "confidence": 0.0,
       "why": "correctly reported not observed",
-      "seconds": 8.1
+      "seconds": 0.0
     }
   ]
 }

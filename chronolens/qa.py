@@ -42,13 +42,20 @@ Hard rules
 - "Restricted area" or similar names map to the configured zone with the closest name; if there is exactly one area
   zone, use it.
 - Counting "how many times" = number of distinct events of that type (after the engine's de-noising).
+- For yes/no questions start the answer with "Yes" or "No" and also return value "yes"/"no".
+- found=False ONLY when the kind of evidence needed does not exist in the tables (e.g. an animal that was never
+  detected). A negative answer that IS supported by the tables ("No, nobody entered while it was stopped",
+  "0 times") is found=True with the supporting events cited.
 
 Tables (pandas DataFrames passed to your function)
 - events: id, type, start, end, duration, subject, kind, cls, zone, other, details, confidence, when
   types: enter_view, exit_view, occluded, reappear, zone_enter, zone_exit, in_zone (interval), stationary (interval),
   untouched (interval, objects with no person contact), interaction (interval, subject=person, other=object/vehicle),
   activity_stop (interval: motion stopped inside an activity zone, e.g. a machine), activity_start,
-  sudden_change (spike in motion / brightness / red light, e.g. an alarm), caption (VLM keyframe description, if enabled)
+  sudden_change (spike in motion / brightness / red light, e.g. a flashing alarm light),
+  sound (from the audio track: details say "alarm-like tone / siren / beeper" or "loud sound (bang / crash / shout)"),
+  caption (VLM keyframe description, if enabled)
+- An "alarm" may be visual (sudden_change red light) or audible (sound alarm-like tone); consider both.
 - ids: id, kind, cls, first_seen, last_seen, visible_seconds, tracklets, reid_links, reid_score
 - tracks: per-sample boxes: t, gid, cls, conf, x1, y1, x2, y2 (pixels; frame size in meta)
 - series: per-sample signals: t, motion, brightness, redness, act::<zone> (motion energy per activity zone)
@@ -186,7 +193,65 @@ def _clean(v):
     return v
 
 
-def ask(a: Analysis, question: str, llm: LLM, max_retries: int = 2) -> QAResult:
+def _finish(a: Analysis, res: QAResult, out: dict) -> QAResult:
+    found = bool(out.get("found", True))
+    res.answer = str(out.get("answer", ""))
+    res.value = _clean(out.get("value"))
+    res.timestamps = [round(float(t), 2) for t in _clean(out.get("timestamps") or []) if t is not None][:12]
+    valid_ids = set(a.events.id)
+    res.event_ids = [e for e in [str(x) for x in _clean(out.get("event_ids") or [])] if e in valid_ids][:30]
+    res.subjects = [str(s) for s in _clean(out.get("subjects") or [])][:20]
+    res.status = "answered" if found else "not_observed"
+    cited = a.events[a.events.id.isin(res.event_ids)]
+    res.evidence = cited[["id", "type", "when", "subject", "zone", "other", "details", "confidence"]].to_dict("records")
+    res.confidence = _confidence(a, res, cited, found)
+    return res
+
+
+def ask_offline(a: Analysis, question: str, reason: str = "") -> QAResult:
+    from .offline import answer_offline
+
+    res = QAResult(question=question, status="error", plan="Offline rule engine over the event log (no LLM)"
+                   + (f" — {reason}" if reason else ""))
+    out = answer_offline(a, question)
+    if out is None:
+        res.error = ("Offline mode understands counts, event times, before/after, ordering, loitering, untouched "
+                     "objects, returns, sounds and time-in-zone questions — try rephrasing, or reconnect the LLM.")
+        return res
+    return _finish(a, res, out)
+
+
+def ask(a: Analysis, question: str, llm: LLM | None, max_retries: int = 2, mode: str = "auto") -> QAResult:
+    """mode: 'auto' (LLM, falls back to offline rules on failure) | 'llm' | 'offline'."""
+    if mode == "offline" or llm is None or not llm.configured:
+        return ask_offline(a, question, "" if mode == "offline" else "no LLM configured")
+    try:
+        res = _ask_llm(a, question, llm, max_retries)
+    except Exception as e:  # noqa: BLE001 - network / quota failure
+        if mode == "llm":
+            raise
+        return ask_offline(a, question, f"LLM unavailable: {str(e)[:120]}")
+    if mode == "auto" and res.status == "answered":
+        off = ask_offline(a, question, "cross-check")
+        if off.status == "answered" and not _agree(res, off):
+            off.plan = (f"Cross-check: the LLM's answer ({res.answer[:160]!r}) disagreed with the deterministic rule "
+                        "engine, so the rule engine's evidence-backed answer is shown.")
+            off.code = res.code
+            return off
+        if off.status == "answered":
+            res.plan = (res.plan + " · Cross-checked: agrees with the deterministic rule engine.").strip(" ·")
+            res.confidence = round(min(1.0, res.confidence + 0.1), 2)
+        return res
+    if mode == "auto" and res.status in ("error", "not_observed"):
+        # evidence beats refusal: if the deterministic rule engine finds supporting events, use them
+        off = ask_offline(a, question, "LLM code failed" if res.status == "error" else "LLM found no evidence; "
+                          "rule engine did")
+        if off.status == "answered" or (res.status == "error" and off.status != "error"):
+            return off
+    return res
+
+
+def _ask_llm(a: Analysis, question: str, llm: LLM, max_retries: int = 2) -> QAResult:
     res = QAResult(question=question, status="error")
     ctx = render_context(a)
     msgs = [{"role": "user", "content": f"{ctx}\n\n## Question\n{question}"}]
@@ -211,20 +276,29 @@ def ask(a: Analysis, question: str, llm: LLM, max_retries: int = 2) -> QAResult:
                                                  "Fix it and reply again with the json and python blocks."}]
             continue
         res.error = ""
-        found = bool(out.get("found", True))
-        res.answer = str(out.get("answer", ""))
-        res.value = _clean(out.get("value"))
-        res.timestamps = [round(float(t), 2) for t in _clean(out.get("timestamps") or []) if t is not None][:12]
-        valid_ids = set(a.events.id)
-        res.event_ids = [e for e in [str(x) for x in _clean(out.get("event_ids") or [])] if e in valid_ids][:30]
-        res.subjects = [str(s) for s in _clean(out.get("subjects") or [])][:20]
-        res.status = "answered" if found else "not_observed"
-        cited = a.events[a.events.id.isin(res.event_ids)]
-        res.evidence = cited[["id", "type", "when", "subject", "zone", "other", "details", "confidence"]].to_dict("records")
-        res.confidence = _confidence(a, res, cited, found)
-        return res
+        return _finish(a, res, out)
     res.status = "error"
     return res
+
+
+def _agree(x: QAResult, y: QAResult, tol: float = 1.5) -> bool:
+    """Do two answers agree on the checkable facts (value and key timestamps)?"""
+    def num(v):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+    vx, vy = x.value, y.value
+    if isinstance(vx, str) or isinstance(vy, str):
+        if str(vx).lower() in ("yes", "no") and str(vy).lower() in ("yes", "no") and str(vx).lower() != str(vy).lower():
+            return False
+    elif num(vx) is not None and num(vy) is not None:
+        if abs(num(vx) - num(vy)) > max(0.01 * abs(num(vy)), 0.5):
+            return False
+    elif num(vy) is not None and vx is None and y.timestamps and not x.timestamps:
+        return False
+    key = y.timestamps[:2]
+    return all(any(abs(t - u) <= tol for u in x.timestamps) for t in key) if key else True
 
 
 def _confidence(a: Analysis, res: QAResult, cited: pd.DataFrame, found: bool) -> float:

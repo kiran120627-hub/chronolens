@@ -6,7 +6,7 @@
 2. Click **Analyse video** on the sample. It's cached, so it loads instantly.
 3. Ask every demo question once, so the answers are cached and replay instantly even if Wi-Fi dies.
 4. Have your own phone clip already analysed too (pick **Upload a video**).
-5. Keep a terminal ready with `python eval/run_eval.py --offline`. It proves 13/13 in about 20 s with no internet.
+5. Keep a terminal ready with `python eval/run_eval.py --offline`. It proves 13/13 in a few seconds with no internet.
 
 ## 3-minute demo
 

@@ -235,8 +235,15 @@ with tab_ask:
                 body += (f'<div style="display:flex;justify-content:space-between;color:#94a3b8;font-size:.8rem">'
                          f'<span>Evidence confidence</span><span>{conf}%</span></div>'
                          f'<div class="cl-meter"><div style="width:{conf}%;background:{col}"></div></div>')
-            if r.plan:
-                body += f'<div style="color:#94a3b8;font-size:.8rem;margin-top:.5rem">⚙ {html.escape(r.plan[:300])}</div>'
+            if r.engine:
+                prov = [r.engine]
+                if r.attempts > 1:
+                    prov.append(f"self-repaired {r.attempts - 1}×")
+                if r.crosscheck == "agrees":
+                    prov.append("cross-checked ✓ (rule engine agrees)")
+                elif r.crosscheck == "overrode LLM":
+                    prov.append("⚠ LLM answer disagreed with the evidence — showing the rule engine's answer")
+                body += f'<div style="color:#94a3b8;font-size:.8rem;margin-top:.5rem">⚙ {html.escape(" · ".join(prov))}</div>'
             st.markdown(f'<div class="cl-card">{body}</div>', unsafe_allow_html=True)
             if r.timestamps:
                 st.caption("Jump to:")

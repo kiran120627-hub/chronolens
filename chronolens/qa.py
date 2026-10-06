@@ -89,6 +89,8 @@ class QAResult:
     subjects: list = field(default_factory=list)
     confidence: float = 0.0
     plan: str = ""
+    engine: str = ""      # "LLM planner" | "rule engine"
+    crosscheck: str = ""  # "agrees" | "overrode LLM" | ""
     code: str = ""
     attempts: int = 0
     error: str = ""
@@ -211,8 +213,8 @@ def _finish(a: Analysis, res: QAResult, out: dict) -> QAResult:
 def ask_offline(a: Analysis, question: str, reason: str = "") -> QAResult:
     from .offline import answer_offline
 
-    res = QAResult(question=question, status="error", plan="Offline rule engine over the event log (no LLM)"
-                   + (f" — {reason}" if reason else ""))
+    res = QAResult(question=question, status="error", engine="rule engine",
+                   plan="Offline rule engine over the event log (no LLM)" + (f" — {reason}" if reason else ""))
     out = answer_offline(a, question)
     if out is None:
         res.error = ("Offline mode understands counts, event times, before/after, ordering, loitering, untouched "
@@ -237,9 +239,10 @@ def ask(a: Analysis, question: str, llm: LLM | None, max_retries: int = 2, mode:
             off.plan = (f"Cross-check: the LLM's answer ({res.answer[:160]!r}) disagreed with the deterministic rule "
                         "engine, so the rule engine's evidence-backed answer is shown.")
             off.code = res.code
+            off.crosscheck = "overrode LLM"
             return off
         if off.status == "answered":
-            res.plan = (res.plan + " · Cross-checked: agrees with the deterministic rule engine.").strip(" ·")
+            res.crosscheck = "agrees"
             res.confidence = round(min(1.0, res.confidence + 0.1), 2)
         return res
     if mode == "auto" and res.status in ("error", "not_observed"):
@@ -252,7 +255,7 @@ def ask(a: Analysis, question: str, llm: LLM | None, max_retries: int = 2, mode:
 
 
 def _ask_llm(a: Analysis, question: str, llm: LLM, max_retries: int = 2) -> QAResult:
-    res = QAResult(question=question, status="error")
+    res = QAResult(question=question, status="error", engine="LLM planner")
     ctx = render_context(a)
     msgs = [{"role": "user", "content": f"{ctx}\n\n## Question\n{question}"}]
     for attempt in range(max_retries + 1):

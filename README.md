@@ -84,7 +84,22 @@ Twelve questions cover ordering, cause and effect, counting, duration, re-identi
 unanswerable trap. They are scored with the problem statement's rule: right answer and right time (±1.5 s) = 1,
 right answer with the wrong time = 0.5.
 
-See `eval/REPORT.md` for the latest score.
+### Result
+
+**12 / 12** on the benchmark (all answers correct, all timestamps within ±1.5 s), with Gemini 3.x Flash
+(free tier). The 100-second video is analysed in about 28 s on an RTX 5070 Laptop GPU. Perception alone, before
+any LLM is involved, recovers the scripted truth:
+
+| ground truth | ChronoLens event log |
+|---|---|
+| machine stops at 20.0 s and 61.0 s | 0:20.1 and 1:01.0 |
+| alarm at 70.0 s | 1:10.0 |
+| P2 leaves zone at 46.44 s / 74.84 s | 0:46.4 / 1:14.9 |
+| loiterer still 58–92 s | 0:57.7–1:33.3 |
+| 3 people (one leaves & returns, one crosses behind a pillar 3×, one is a mirrored look-alike) | 3 identities, all re-ID links correct |
+
+Full table: `eval/REPORT.md`. The LLM client automatically falls back across models when a free-tier daily quota
+(20 requests per model) or an overload (HTTP 503) is hit, and answers are cached, so a demo never stalls.
 
 ## Scope note
 

@@ -26,7 +26,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_MODELS = {"anthropic": "claude-sonnet-5-5", "openai": "gpt-4.1-mini"}
 PRESETS = {
-    "gemini": ("openai", "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.5-flash"),
+    "gemini": ("openai", "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-3.8-flash"),
     "groq": ("openai", "https://api.groq.com/openai/v1", "meta-llama/llama-4-scout-17b-16e-instruct"),
     "openrouter": ("openai", "https://openrouter.ai/api/v1", "anthropic/claude-sonnet-4.5"),
     "ollama": ("openai", "http://localhost:11434/v1", "qwen2.5vl:7b"),
@@ -56,6 +56,8 @@ class LLM:
     cache: bool = True
     cache_dir: Path = ROOT / ".cache" / "llm"
     max_tokens: int = 6000
+    fallbacks: list = field(default_factory=list)  # tried in order when the main model is overloaded/unavailable
+    exhausted: set = field(default_factory=set)  # models whose daily quota is used up (skipped for this process)
     calls: int = 0
     cache_hits: int = 0
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
@@ -71,9 +73,14 @@ class LLM:
             provider, base_url, model = p, base_url or url, model or m
         key = os.environ.get("LLM_API_KEY") or (os.environ.get("ANTHROPIC_API_KEY", "") if provider == "anthropic"
                                                 else os.environ.get("OPENAI_API_KEY", ""))
+        fb = [m.strip() for m in os.environ.get("LLM_FALLBACK_MODELS", "").split(",") if m.strip()]
+        if not fb and "generativelanguage" in (base_url or ""):
+            # free tier = 20 requests/day *per model*, so spread load over several capable flash models
+            fb = ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest",
+                  "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
         return cls(provider=provider, model=model or DEFAULT_MODELS.get(provider, ""), api_key=key,
                    base_url=base_url or ("https://api.openai.com/v1" if provider == "openai" else ""),
-                   cache=os.environ.get("LLM_CACHE", "1") != "0")
+                   cache=os.environ.get("LLM_CACHE", "1") != "0", fallbacks=fb)
 
     @property
     def label(self) -> str:
@@ -94,7 +101,25 @@ class LLM:
             return json.loads(path.read_text(encoding="utf-8"))["text"]
         if not self.configured:
             raise LLMError("No LLM API key configured. Set LLM_API_KEY in .env (see .env.example).")
-        text = self._with_retries(system, messages, temperature)
+        primary, last_err = self.model, None
+        text = None
+        for m in [primary] + [f for f in self.fallbacks if f != primary]:
+            if m in self.exhausted:
+                continue
+            self.model = m
+            try:
+                text = self._with_retries(system, messages, temperature)
+                break
+            except LLMError as e:
+                last_err = e
+                if "PerDay" in str(e) or "per day" in str(e).lower():
+                    self.exhausted.add(m)
+                if not any(code in str(e) for code in ("HTTP 503", "HTTP 429", "HTTP 404", "HTTP 500", "network")):
+                    break
+            finally:
+                self.model = primary
+        if text is None:
+            raise last_err or LLMError("LLM call failed")
         if self.cache:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps({"model": self.model, "text": text}), encoding="utf-8")
@@ -110,12 +135,15 @@ class LLM:
                 fn = self._anthropic if self.provider == "anthropic" else self._openai
                 return fn(system, messages, temperature)
             except urllib.error.HTTPError as e:
-                body = e.read().decode("utf-8", "replace")[:600]
-                last = LLMError(f"HTTP {e.code} from {self.label}: {body}")
+                body = e.read().decode("utf-8", "replace")
+                per_day = " [PerDay quota]" if "PerDay" in body else ""
+                last = LLMError(f"HTTP {e.code} from {self.label}{per_day}: {body[:400]}")
                 if e.code == 400 and "temperature" in body:
                     temperature = None
                     continue
                 if e.code in (429, 500, 502, 503, 504, 529):
+                    if self.fallbacks and (attempt >= 1 or "PerDay" in body):
+                        raise last from e  # let complete() switch to a fallback model quickly
                     time.sleep(2 ** attempt * 2)
                     continue
                 raise last from e

@@ -36,7 +36,8 @@ def grade(q: dict, r, tol: float) -> tuple[float, str, bool, bool]:
         return 0.0, f"no answer ({r.status})", False, False
     ok, why = True, []
     if "subjects" in exp:
-        subj = [s for s in r.subjects if s.startswith("P") or s.startswith("V")]
+        kinds = {e[0] for e in exp["subjects"]}  # compare like with like (people vs vehicles)
+        subj = [s for s in r.subjects if s[:1] in kinds]
         if len(exp["subjects"]) > 1:  # order matters
             got = [s for s in subj if s in exp["subjects"]]
             ok &= got[:len(exp["subjects"])] == exp["subjects"]
@@ -80,12 +81,17 @@ def main() -> None:
     rows = []
     for q in meta["questions"]:
         t1 = time.time()
-        r = ask(a, q["question"], llm)
+        try:
+            r = ask(a, q["question"], llm)
+        except Exception as e:  # noqa: BLE001 - one failed call must not stop the benchmark
+            from chronolens.qa import QAResult
+            r = QAResult(question=q["question"], status="error", error=str(e)[:300])
         s, why, ans_ok, time_ok = grade(q, r, meta["time_tolerance"])
         rows.append({"id": q["id"], "skill": q["skill"], "question": q["question"], "score": s, "answer": r.answer,
                      "status": r.status, "timestamps": r.timestamps, "subjects": r.subjects, "value": r.value,
                      "confidence": r.confidence, "why": why, "seconds": round(time.time() - t1, 1)})
-        print(f"{q['id']} {s:.1f}  {r.status:<12} {r.answer[:110]}")
+        print(f"{q['id']} {s:.1f}  {r.status:<12} {(r.answer or r.error)[:150]}")
+        print(f"        grader: {why}")
     total = sum(r["score"] for r in rows)
     summary = {"score": total, "max": len(rows), "model": llm.label, "analysis_seconds": round(t_an, 1),
                "video_seconds": a.meta["duration"], "people_found": len(people), "people_expected": 3,

@@ -3,7 +3,7 @@
     "score": 13.0,
     "max": 13,
     "model": "offline rule engine (no LLM)",
-    "analysis_seconds": 25.9,
+    "analysis_seconds": 39.6,
     "video_seconds": 100.0,
     "people_found": 3,
     "people_expected": 3,
@@ -26,7 +26,7 @@
         "P2"
       ],
       "value": null,
-      "confidence": 0.87,
+      "confidence": 0.92,
       "why": "subjects ['P2'] vs ['P2']; times 0:40.6, 1:06.0 vs 0:40.6",
       "seconds": 0.0
     },
@@ -62,7 +62,7 @@
         "P2"
       ],
       "value": null,
-      "confidence": 0.87,
+      "confidence": 0.95,
       "why": "subjects ['P2'] vs ['P2']; times 1:06.0, 1:10.0 vs 1:05.9",
       "seconds": 0.0
     },
@@ -88,7 +88,7 @@
       "skill": "duration",
       "question": "When did the delivery vehicle arrive and how long did it stay parked?",
       "score": 1.0,
-      "answer": "The vehicle V1 arrived at 0:26.5. It stayed parked 0:29.8\u20131:21.4 (51.6s).",
+      "answer": "The vehicle V1 arrived at 0:26.5. It stayed parked 0:29.8\u20131:21.4 (51.7s).",
       "status": "answered",
       "timestamps": [
         26.48,
@@ -97,9 +97,9 @@
       "subjects": [
         "V1"
       ],
-      "value": 51.6,
-      "confidence": 0.81,
-      "why": "value 51.6 vs 50.0; times 0:26.5, 0:29.8 vs 0:26.0",
+      "value": 51.68,
+      "confidence": 0.88,
+      "why": "value 51.68 vs 50.0; times 0:26.5, 0:29.8 vs 0:26.0",
       "seconds": 0.0
     },
     {
@@ -107,7 +107,7 @@
       "skill": "re-identification",
       "question": "Did the first person who appeared come back later? If so, when?",
       "score": 1.0,
-      "answer": "Yes: P1 came back at 0:41.0 (seen again after 23.4s unseen (re-identified, link score 0.71)).",
+      "answer": "Yes: P1 came back at 0:41.0 (seen again after 23.4s unseen (re-identified, link score 0.73)).",
       "status": "answered",
       "timestamps": [
         40.96
@@ -116,7 +116,7 @@
         "P1"
       ],
       "value": "yes",
-      "confidence": 0.71,
+      "confidence": 0.73,
       "why": "subjects ['P1'] vs ['P1']; times 0:41.0 vs 0:40.8",
       "seconds": 0.0
     },
@@ -125,17 +125,17 @@
       "skill": "stationary",
       "question": "Who stood still for more than 20 seconds, and when?",
       "score": 1.0,
-      "answer": "Stood still >20s: P3 from 0:57.6 to 1:33.4 (35.8s).",
+      "answer": "Stood still >20s: P3 from 0:57.7 to 1:33.3 (35.6s).",
       "status": "answered",
       "timestamps": [
-        57.6
+        57.68
       ],
       "subjects": [
         "P3"
       ],
       "value": null,
-      "confidence": 0.9,
-      "why": "subjects ['P3'] vs ['P3']; times 0:57.6 vs 0:58.0",
+      "confidence": 0.93,
+      "why": "subjects ['P3'] vs ['P3']; times 0:57.7 vs 0:58.0",
       "seconds": 0.0
     },
     {
@@ -156,7 +156,7 @@
         "P3"
       ],
       "value": 3,
-      "confidence": 0.71,
+      "confidence": 0.73,
       "why": "value 3 vs 3",
       "seconds": 0.0
     },
@@ -176,7 +176,7 @@
         "P2"
       ],
       "value": null,
-      "confidence": 0.71,
+      "confidence": 0.73,
       "why": "subjects ['P1', 'P2'] vs ['P1', 'P2']; times 0:12.0, 0:40.6 vs 0:12.0, 0:40.6",
       "seconds": 0.0
     },
@@ -212,7 +212,7 @@
         "P2"
       ],
       "value": 14.6,
-      "confidence": 0.87,
+      "confidence": 0.92,
       "why": "value 14.6 vs 14.7",
       "seconds": 0.0
     },

@@ -44,7 +44,7 @@ def _zone(a: Analysis, q: str) -> str | None:
         if z.lower() in q:
             return z
     # only assume the default zone when the question actually talks about an area
-    return zones[0] if zones and re.search(r"restrict|zone|area|forbidden|danger|inside", q) else None
+    return zones[0] if zones and re.search(r"restrict|zone|area|forbidden|danger|inside|door|gate|entrance", q) else None
 
 
 def _alarm(ev: pd.DataFrame) -> pd.DataFrame:
@@ -157,7 +157,8 @@ def answer_offline(a: Analysis, question: str) -> dict | None:
                        + ", ".join(f"{fmt_t(r.start)}–{fmt_t(r.end)}" for r in rows.itertuples()) + ".", rows,
                        value=round(tot, 1))
 
-    if zone and re.search(r"enter|went into|walk(ed)? into|go into|inside", q):
+    if zone and re.search(r"enter|went into|walk(ed)? into|go into|inside|st(oo|a)d at|stopp?(ed)? at|went to|"
+                          r"go to|approach|visit|at the (door|gate|zone|area)", q):
         rows = ev[(ev.type == "zone_enter") & (ev.zone == zone) & ev.subject.str.startswith("P")].sort_values("start")
         ref_txt = ""
         if re.search(r"after .*(truck|vehicle|delivery|car|bus|van)", q):
@@ -185,7 +186,14 @@ def answer_offline(a: Analysis, question: str) -> dict | None:
         return _result(True, "Stood still >" + f"{n:.0f}s: " + ", ".join(
             f"{r.subject} from {fmt_t(r.start)} to {fmt_t(r.end)} ({r.duration:.1f}s)" for r in rows.itertuples()) + ".", rows)
 
-    if re.search(r"untouched|left behind|abandon|unattended|left (a|the) (bag|object)", q):
+    if re.search(r"who (left|dropped|put|placed)|whose bag|owner", q):
+        rows = ev[ev.type == "object_left"]
+        if rows.empty:
+            return _result(False, "Not observed: no object was seen being left behind.")
+        return _result(True, "; ".join(f"{r.details} at {fmt_t(r.start)}" for r in rows.itertuples()) + ".", rows,
+                       subjects=list(dict.fromkeys(list(rows.other) + list(rows.subject))))
+
+    if re.search(r"untouched|left behind|abandon|unattended|left (a|the|any) (bag|object)|(bag|object) .*left", q):
         n = _duration(q, a.settings.stationary_min)
         rows = ev[(ev.type == "untouched") & (ev.duration > n)]
         if rows.empty:

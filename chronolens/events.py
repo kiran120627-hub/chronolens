@@ -18,6 +18,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from .camera import CameraPath
 from .config import Settings, fmt_t, point_in_poly
 
 COLUMNS = ["id", "type", "start", "end", "duration", "subject", "kind", "cls", "zone", "other", "details", "confidence"]
@@ -72,6 +73,14 @@ def build_events(det: pd.DataFrame, identities: pd.DataFrame, series: pd.DataFra
                    "duration": round(float(end) - float(start), 2), "subject": subject, "kind": kind, "cls": cls,
                    "zone": zone, "other": other, "details": details, "confidence": round(float(conf), 2)})
 
+    # camera shift per sample (hand-held footage): map detections back into the zone-drawing frame
+    cam = CameraPath(series)
+
+    def scene_px(tt, px, py):
+        """Pixel coordinates in this frame -> pixel coordinates in the reference (zone-drawing) frame."""
+        rx, ry = cam.to_ref(tt, np.asarray(px, float) / W, np.asarray(py, float) / H)
+        return rx * W, ry * H
+
     segments: dict[str, list[tuple[float, float]]] = {}
     id_info = identities.set_index("id").to_dict("index") if len(identities) else {}
     area_zones = [z for z in settings.zones if z.kind == "area"]
@@ -109,6 +118,7 @@ def build_events(det: pd.DataFrame, identities: pd.DataFrame, series: pd.DataFra
                 ax, ay = (g.x1 + g.x2) / 2 / W, g.y2 / H  # feet
             else:
                 ax, ay = (g.x1 + g.x2) / 2 / W, (g.y1 + g.y2) / 2 / H
+            ax, ay = cam.to_ref(g.t.to_numpy(), ax.to_numpy(), ay.to_numpy())
             for z in area_zones:
                 inside = np.array([point_in_poly(x, y, z.points) for x, y in zip(ax, ay)])
                 presence = []
@@ -133,6 +143,7 @@ def build_events(det: pd.DataFrame, identities: pd.DataFrame, series: pd.DataFra
 
         # ---- stationary
         cx, cy = ((g.x1 + g.x2) / 2).to_numpy(), ((g.y1 + g.y2) / 2).to_numpy()
+        cx, cy = scene_px(g.t.to_numpy(), cx, cy)  # scene coordinates: camera shake is not movement
         hh = (g.y2 - g.y1).to_numpy()
         for s, e in segs:
             i = s
@@ -189,6 +200,36 @@ def build_events(det: pd.DataFrame, identities: pd.DataFrame, series: pd.DataFra
                 ev.append({**e, "type": "untouched", "start": fs, "end": fe, "duration": round(fe - fs, 2),
                            "details": f"{e['subject']} ({e['cls']}) untouched for {fe - fs:.1f}s"})
 
+    # ---- who left an object: nearest person when a still object first appears inside the frame
+    people_det = det[det.gid.map(lambda x: str(x).startswith("P"))]
+    for e in [x for x in ev if x["type"] == "enter_view" and str(x["subject"]).startswith("B")
+              and "inside the frame" in x["details"]]:
+        og = det[(det.gid == e["subject"])].sort_values("t")
+        if og.empty or people_det.empty:
+            continue
+        o = og.iloc[0]
+        ocx, ocy = (o.x1 + o.x2) / 2, (o.y1 + o.y2) / 2
+        early = og[og.t <= og.t.iloc[0] + 3.0]
+        ex, ey = scene_px(early.t.to_numpy(), (early.x1 + early.x2) / 2, (early.y1 + early.y2) / 2)
+        drift = float(np.hypot(ex - ex[0], ey - ey[0]).max())
+        if len(early) < 5 or drift > 0.3 * max(o.y2 - o.y1, 8.0):
+            continue  # it is moving (being carried), not left behind
+        held = og.merge(people_det, on="t", suffixes=("", "_p"))
+        if len(held):
+            ocx_, ocy_ = (held.x1 + held.x2) / 2, (held.y1 + held.y2) / 2
+            inside = ((ocx_ > held.x1_p) & (ocx_ < held.x2_p) & (ocy_ > held.y1_p) & (ocy_ < held.y2_p))
+            if inside.groupby(held.t).any().sum() >= 0.5 * og.t.nunique():
+                continue  # it stays inside a person's box: held (phone, bag in hand), not left behind
+        near = people_det[(people_det.t >= e["start"] - 4.0) & (people_det.t <= e["start"] + 1.0)].copy()
+        if near.empty:
+            continue
+        near["d"] = np.hypot((near.x1 + near.x2) / 2 - ocx, near.y2 - ocy) / max(W, H)
+        best = near.sort_values("d").iloc[0]
+        if best.d < 0.35:
+            add("object_left", e["start"], subject=e["subject"], kind=e["kind"], cls=e["cls"], other=best.gid,
+                conf=min(0.95, 1.0 - best.d), details=f"{e['subject']} ({e['cls']}) left by {best.gid} "
+                f"(nearest person, {fmt_t(best.t)})")
+
     # ---- activity zones (machines)
     activity_summary = {}
     for z in [z for z in settings.zones if z.kind == "activity"]:
@@ -226,6 +267,9 @@ def build_events(det: pd.DataFrame, identities: pd.DataFrame, series: pd.DataFra
     # ---- sudden changes
     if len(series) > 5:
         t = series.t.to_numpy()
+        cs = cam.speed()
+        cs = np.interp(t, cam.t, cs) if len(cs) != len(t) else cs
+        cam_moving = np.convolve(cs > 0.004, np.ones(5), mode="same") > 0  # +-2 samples around a camera move
         for col, label, sign in (("motion", "sudden burst of motion", 1), ("brightness", "sudden brightness change", 0),
                                  ("redness", "red light / flashing", 1)):
             x = series[col].to_numpy().astype(float)
@@ -233,7 +277,11 @@ def build_events(det: pd.DataFrame, identities: pd.DataFrame, series: pd.DataFra
             mad = np.median(np.abs(d - np.median(d))) + 1e-6
             z = 0.6745 * (d - np.median(d)) / mad
             thr = 8.0 if col != "redness" else 6.0
-            flags = (z > thr) & (np.abs(d) > (1.5 if col != "motion" else 2.0))
+            min_abs = {"motion": 2.5, "brightness": 6.0, "redness": 4.0}[col]
+            flags = (z > thr) & (np.abs(d) > min_abs)
+            if col in ("motion", "brightness"):
+                flags &= ~cam_moving  # the camera itself moved or re-exposed: not an event in the scene
+                flags &= (t > 1.5) & (t < t[-1] - 1.5)  # recording being started / stopped by hand
             for f, rs, re_, _, _ in _runs(t, flags):
                 if f:
                     add("sudden_change", rs, re_, zone="whole frame", conf=float(min(1.0, 0.5 + z[(t >= rs) & (t <= re_)].max() / 40)),
@@ -250,7 +298,7 @@ def build_events(det: pd.DataFrame, identities: pd.DataFrame, series: pd.DataFra
         ev = [e for e in ev if e["type"] != "sudden_change"] + merged
 
     df = pd.DataFrame(ev, columns=[c for c in COLUMNS if c != "id"])
-    order = {"enter_view": 0, "reappear": 1, "zone_enter": 2, "in_zone": 3, "interaction": 4, "stationary": 5,
+    order = {"object_left": 0, "enter_view": 0, "reappear": 1, "zone_enter": 2, "in_zone": 3, "interaction": 4, "stationary": 5,
              "untouched": 6, "activity_stop": 7, "activity_start": 8, "sudden_change": 9, "zone_exit": 10,
              "occluded": 11, "exit_view": 12, "caption": 13}
     df["_o"] = df["type"].map(order).fillna(99)

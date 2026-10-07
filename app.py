@@ -198,6 +198,11 @@ ss.setdefault("analysis", None)
 def default_zones(video: Path) -> list[dict]:
     if video == SAMPLE and SAMPLE_META.exists():
         return json.loads(SAMPLE_META.read_text())["zones"]
+    preset = ROOT / "data" / "videos" / "zones.json"  # saved zones for the demo clips
+    if preset.exists():
+        saved = json.loads(preset.read_text())
+        if video.name in saved:
+            return [dict(z, points=[tuple(p) for p in z["points"]]) for z in saved[video.name]]
     return [{"name": "Restricted area", "kind": "area", "points": [(0.6, 0.55), (0.98, 0.55), (0.98, 0.98), (0.6, 0.98)]}]
 
 
@@ -329,8 +334,11 @@ llm = LLM.from_env()
 with st.sidebar:
     st.markdown('<div class="cl-side-brand"><span class="cl-mark"></span>ChronoLens</div>', unsafe_allow_html=True)
     st.markdown('<div class="cl-label">Source</div>', unsafe_allow_html=True)
-    src = st.radio("Source", ["Sample · warehouse", "Upload video"], label_visibility="collapsed", horizontal=True)
+    clips = sorted(p for p in (ROOT / "data" / "videos").glob("*.mp4") if p != SAMPLE)
+    src = st.radio("Source", ["Sample · warehouse", "Recorded clips", "Upload video"], label_visibility="collapsed")
     video = SAMPLE
+    if src == "Recorded clips" and clips:
+        video = st.selectbox("Clip", clips, format_func=lambda p: p.stem, label_visibility="collapsed")
     if src == "Upload video":
         up = st.file_uploader("Video file", type=["mp4", "mov", "avi", "mkv", "webm"], label_visibility="collapsed")
         if up:

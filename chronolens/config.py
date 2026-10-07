@@ -6,10 +6,10 @@ from dataclasses import asdict, dataclass, field
 # COCO classes we track. Everything else is ignored.
 TRACK_CLASSES = {
     0: "person", 1: "bicycle", 2: "car", 3: "motorcycle", 5: "bus", 7: "truck",
-    24: "backpack", 26: "handbag", 28: "suitcase", 39: "bottle", 56: "chair", 63: "laptop", 67: "cell phone",
+    24: "backpack", 26: "handbag", 28: "suitcase", 39: "bottle", 63: "laptop", 67: "cell phone",
 }
 VEHICLES = {"car", "bus", "truck", "motorcycle", "bicycle"}
-CARRIED_OBJECTS = {"backpack", "handbag", "suitcase", "bottle", "laptop", "cell phone", "chair"}
+CARRIED_OBJECTS = {"backpack", "handbag", "suitcase", "bottle", "laptop", "cell phone"}
 
 
 @dataclass
@@ -28,11 +28,17 @@ class Zone:
 class Settings:
     target_fps: float = 10.0          # analysis sampling rate
     model: str = "yolo11s.pt"         # detector (n = fastest, s = balanced, m = most accurate)
-    conf: float = 0.30                # detection confidence threshold
-    imgsz: int = 960
+    conf: float = 0.20                # detection confidence threshold (weak short tracks are filtered later)
+    imgsz: int = 1280                 # inference size; larger finds small/far people and bags
     track_buffer: int = 60            # tracker frames to keep a lost track alive (60 @10fps = 6 s)
     min_track_seconds: float = 0.6    # ignore flickering tracks shorter than this
-    reid_threshold: float = 0.62      # min similarity to merge two tracklets into one identity
+    reid_threshold: float = 0.62      # similarity that always links two tracklets into one identity
+    reid_floor: float = 0.50          # ...or this much, if it is clearly the best candidate (by reid_margin)
+    reid_margin: float = 0.12
+    static_conf: float = 0.03         # sensitive bag detector for left-behind objects (validated by persistence)
+    static_min_seconds: float = 5.0   # a weak detection must stay put this long to count as a real object
+    reid_verify_low: float = 0.40     # grey zone [verify_low, threshold): ask a vision-language model (if configured)
+    reid_verify_max: int = 8          # at most this many VLM checks per video
     reid_max_gap: float = 180.0       # max seconds between tracklets for re-identification
     segment_gap: float = 1.0          # gaps shorter than this are bridged when building visibility segments
     zone_min_dwell: float = 0.5       # hysteresis for zone enter/exit

@@ -67,6 +67,7 @@ def video_key(path: Path, settings: Settings) -> str:
                        for k, v in d.items() if k in ("target_fps", "model", "conf", "imgsz", "track_buffer",
                                                       "captions_every")}
     # only activity zones change the perception pass (motion masks); area zones are post-processing
+    perception_keys["perception_version"] = 3  # bump when the perception pass changes
     perception_keys["activity_zones"] = [[round(float(c), 3) for p in z["points"] for c in p]
                                          for z in d["zones"] if z["kind"] == "activity"]
     h.update(json.dumps(perception_keys, sort_keys=True, default=str).encode())
@@ -85,6 +86,36 @@ def analyze(video: str | Path, settings: Settings, progress: Progress | None = N
         run_perception(video, out, settings, lambda f, m: progress(0.05 + 0.75 * f, m))
     meta = json.loads((out / "meta.json").read_text())
     return post_process(out, meta, settings, progress, llm=llm)
+
+
+REID_SYSTEM = """You verify person re-identification for a video analytics system. You get two snapshots from the
+same fixed camera, taken at different times. Decide whether they show the SAME individual. Compare clothing colours
+and patterns (shirt, trousers, shoes), body build, hair and skin tone. IGNORE pose, front/back view, distance, lighting,
+motion blur, and carried items such as backpacks or bags (people put them down and pick them up).
+Reply with one ```json block: {"same": true|false, "confidence": 0.0-1.0, "reason": "max 12 words"}"""
+
+
+def make_vlm_verifier(out: Path, llm):
+    import base64
+
+    from .llm import extract_json
+
+    def verify(track_a: int, track_b: int):
+        pa, pb = out / "thumbs" / f"track_{track_a}.jpg", out / "thumbs" / f"track_{track_b}.jpg"
+        if not (pa.exists() and pb.exists()):
+            return None
+        parts = [{"type": "text", "text": "Snapshot A (earlier):"},
+                 {"type": "image", "b64": base64.b64encode(pa.read_bytes()).decode(), "mime": "image/jpeg"},
+                 {"type": "text", "text": "Snapshot B (later):"},
+                 {"type": "image", "b64": base64.b64encode(pb.read_bytes()).decode(), "mime": "image/jpeg"},
+                 {"type": "text", "text": "Same person?"}]
+        try:
+            d = extract_json(llm.complete(REID_SYSTEM, [{"role": "user", "content": parts}], tag="reid"))
+            return bool(d.get("same")), float(d.get("confidence", 0)), str(d.get("reason", ""))[:120]
+        except Exception as e:  # noqa: BLE001 - no verdict -> deterministic decision stands
+            print(f"[chronolens] re-ID verification skipped: {e}")
+            return None
+    return verify
 
 
 def auto_tune(video: Path, settings: Settings, progress: Progress) -> Settings:
@@ -109,7 +140,8 @@ def post_process(out: Path, meta: dict, settings: Settings, progress: Progress |
     series = pd.read_csv(out / "series.csv")
     app = dict(np.load(out / "appearance.npz")) if (out / "appearance.npz").exists() else {}
     tracklets, det = build_tracklets(det, settings)
-    gid_of, identities, links = link_tracklets(tracklets, app, meta["width"], meta["height"], settings)
+    verifier = make_vlm_verifier(out, llm) if (llm is not None and getattr(llm, "configured", False)) else None
+    gid_of, identities, links = link_tracklets(tracklets, app, meta["width"], meta["height"], settings, verifier)
     det["gid"] = det.track.map(gid_of)
     det = det.dropna(subset=["gid"])
     progress(0.88, "Building the event log")
@@ -147,7 +179,7 @@ def post_process(out: Path, meta: dict, settings: Settings, progress: Progress |
     events.to_csv(out / "events.csv", index=False)
     (out / "segments.json").write_text(json.dumps(extra, default=float))
     a = Analysis(out, meta, settings, det, identities, links, events, series, extra["segments"])
-    render_key = hashlib.sha256(b"style-v2" + (out / "events.csv").read_bytes()
+    render_key = hashlib.sha256(b"style-v3" + (out / "events.csv").read_bytes()
                                 + (out / "tracks_global.csv").read_bytes()).hexdigest()
     stamp = out / "annotated.key"
     if not a.annotated.exists() or not stamp.exists() or stamp.read_text() != render_key:
@@ -186,6 +218,9 @@ def render_annotated(a: Analysis) -> Path:
                              "-s", f"{w}x{h}", "-r", f"{fps / skip:.3f}", "-i", "-", "-an", "-c:v", "libx264", "-preset",
                              "veryfast", "-crf", "26", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
                              str(a.annotated)], stdin=subprocess.PIPE)
+    from .camera import CameraPath
+
+    cam = CameraPath(a.series)
     cap = cv2.VideoCapture(str(a.video))
     idx = 0
     while True:
@@ -199,8 +234,9 @@ def render_annotated(a: Analysis) -> Path:
             break
         t = idx / fps
         frame = cv2.resize(frame, (w, h))
-        for z in settings.zones:
-            pts = np.array([[x * w, y * h] for x, y in z.points], np.int32)
+        for z in settings.zones:  # zones are defined on the reference frame; follow the camera
+            zx, zy = cam.from_ref(np.full(len(z.points), t), [p[0] for p in z.points], [p[1] for p in z.points])
+            pts = np.array([[x * w, y * h] for x, y in zip(zx, zy)], np.int32)
             col = (0, 0, 255) if z.kind == "area" else (0, 200, 255)
             overlay = frame.copy()
             cv2.fillPoly(overlay, [pts], col)

@@ -63,7 +63,67 @@ def build_tracklets(det: pd.DataFrame, settings: Settings) -> tuple[dict[int, Tr
         out[int(tid)] = Tracklet(int(tid), cls, kind_of(cls), float(f.t), float(l.t), len(g),
                                  (f.x1, f.y1, f.x2, f.y2), (l.x1, l.y1, l.x2, l.y2), float(g.conf.mean()))
         keep.append(tid)
+    keep = _drop_duplicate_tracks(det[det.track.isin(keep)], out)
+    out = {k: v for k, v in out.items() if k in keep}
     return out, det[det.track.isin(keep)].copy()
+
+
+def _drop_duplicate_tracks(det: pd.DataFrame, tracklets: dict) -> set:
+    """A short track whose boxes sit inside another simultaneous track of the same kind is a duplicate detection."""
+    keep = set(det.track.unique())
+    by_t = {t: g for t, g in det.groupby("t")}
+    for tid, g in det.groupby("track"):
+        tr = tracklets.get(int(tid))
+        if tr is None or tr.end - tr.start > 4.0:
+            continue
+        inside = 0
+        for r in g.itertuples():
+            others = by_t[r.t]
+            others = others[(others.track != tid) & others.track.isin(keep)]
+            area = max((r.x2 - r.x1) * (r.y2 - r.y1), 1e-6)
+            for o in others.itertuples():
+                if kind_of(o.cls) != tr.kind:
+                    continue
+                iw = max(0.0, min(r.x2, o.x2) - max(r.x1, o.x1))
+                ih = max(0.0, min(r.y2, o.y2) - max(r.y1, o.y1))
+                if iw * ih / area > 0.6:
+                    inside += 1
+                    break
+        if inside >= 0.6 * len(g):
+            keep.discard(tid)
+    return _drop_contained(det[det.track.isin(keep)], tracklets, keep)
+
+
+def _contained(r, o) -> float:
+    iw = max(0.0, min(r.x2, o.x2) - max(r.x1, o.x1))
+    ih = max(0.0, min(r.y2, o.y2) - max(r.y1, o.y1))
+    return iw * ih / max((r.x2 - r.x1) * (r.y2 - r.y1), 1e-6)
+
+
+def _drop_contained(det: pd.DataFrame, tracklets: dict, keep: set) -> set:
+    """Remove ghosts: faint people inside a vehicle (occupants / reflections) and 'left objects' that are held."""
+    by_t = {t: g for t, g in det.groupby("t")}
+    for tid, g in det.groupby("track"):
+        tr = tracklets.get(int(tid))
+        if tr is None:
+            continue
+        static_obj = int(tid) >= 100000
+        faint_person = tr.kind == "person" and g.conf.mean() < 0.45
+        if not (static_obj or faint_person):
+            continue
+        hits = 0
+        for r in g.itertuples():
+            others = by_t[r.t]
+            others = others[others.track != tid]
+            if faint_person:
+                hosts = others[others.cls.map(kind_of) == "vehicle"]
+                hits += any(_contained(r, o) > 0.8 for o in hosts.itertuples())
+            else:
+                hosts = others[others.cls == "person"]
+                hits += any(_contained(r, o) > 0.5 for o in hosts.itertuples())
+        if hits >= (0.6 if faint_person else 0.5) * len(g):
+            keep.discard(tid)
+    return keep
 
 
 def appearance_similarity(a: int, b: int, app: dict) -> tuple[float, dict]:
@@ -82,7 +142,8 @@ def appearance_similarity(a: int, b: int, app: dict) -> tuple[float, dict]:
     return next(iter(parts.values())), parts
 
 
-def link_tracklets(tracklets: dict[int, Tracklet], app: dict, W: int, H: int, settings: Settings):
+def link_tracklets(tracklets: dict[int, Tracklet], app: dict, W: int, H: int, settings: Settings, verifier=None):
+    """verifier(track_a, track_b) -> (same: bool, confidence: float, reason: str) | None, for grey-zone pairs."""
     diag = float(np.hypot(W, H))
     cands = []
     items = sorted(tracklets.values(), key=lambda x: x.start)
@@ -119,14 +180,39 @@ def link_tracklets(tracklets: dict[int, Tracklet], app: dict, W: int, H: int, se
     by_b: dict[int, list] = {}
     for c in cands:
         by_b.setdefault(c[2], []).append(c)
+    checks = 0
     for b in [t.track for t in items]:
-        for score, a, _, gap, reason in sorted(by_b.get(b, []), reverse=True):
-            if score < settings.reid_threshold:
-                break
+        ranked = sorted(by_b.get(b, []), reverse=True)
+        # grey zone: let a vision-language model look at the two best snapshots (top-2 candidates only)
+        if verifier is not None:
+            upgraded = []
+            for k, (score, a, b_, gap, reason) in enumerate(ranked):
+                if (k < 2 and a not in succ and settings.reid_verify_low <= score < settings.reid_threshold
+                        and checks < settings.reid_verify_max):
+                    checks += 1
+                    verdict = verifier(a, b)
+                    if verdict is not None:
+                        same, conf, why = verdict
+                        if same and conf >= 0.6:
+                            score = max(score, settings.reid_threshold + 0.01 * conf)
+                            reason = f"{reason}; vision model: same person ({conf:.2f}) - {why}"
+                        elif not same and conf >= 0.6:
+                            score = min(score, settings.reid_verify_low - 0.01)
+                            reason = f"{reason}; vision model: different person ({conf:.2f}) - {why}"
+                upgraded.append((score, a, b_, gap, reason))
+            ranked = sorted(upgraded, reverse=True)
+        for k, (score, a, _, gap, reason) in enumerate(ranked):
             if a in succ:
                 continue
+            others = [c[0] for j, c in enumerate(ranked) if j != k]
+            runner_up = max(others or [0.0])
+            # "clearly the best" needs an actual competitor to be clearly better than
+            clear_best = bool(others) and score >= settings.reid_floor and score - runner_up >= settings.reid_margin
+            if score < settings.reid_threshold and not clear_best:
+                break
             succ[a], pred[b] = b, a
-            links.append({"from_track": a, "to_track": b, "score": round(score, 3), "gap": round(gap, 2), "reason": reason})
+            why = reason if score >= settings.reid_threshold else f"{reason}; clearly the best match (next {runner_up:.2f})"
+            links.append({"from_track": a, "to_track": b, "score": round(score, 3), "gap": round(gap, 2), "reason": why})
             break
     # chains -> identities
     gid_of: dict[int, str] = {}

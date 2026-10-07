@@ -5,3 +5,8 @@ __pycache__/
 analysis/
 data/uploads/
 *.pt
+
+# real recordings of people stay local (privacy)
+data/videos/clip*.mp4
+*.part
+.yolo*

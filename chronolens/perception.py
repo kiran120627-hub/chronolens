@@ -19,6 +19,8 @@ import cv2
 import numpy as np
 import pandas as pd
 
+from .camera import COLS as CAM_COLS
+from .camera import CameraPath, Registrar
 from .config import TRACK_CLASSES, Settings
 
 Progress = Callable[[float, str], None]
@@ -50,15 +52,25 @@ def probe(path: str | Path, target_fps: float = 10.0) -> VideoMeta:
 
 # ----------------------------------------------------------------------------- appearance
 def hsv_hist(crop: np.ndarray) -> np.ndarray:
-    """Colour signature: separate H-S histograms for upper and lower half (clothes / vehicle body)."""
+    """Clothing signature for the torso (upper) and legs (lower) of the box's central column.
+
+    Each part = hue-saturation histogram (colour) + brightness histogram (black vs white clothes differ mainly in
+    brightness, which a hue-saturation histogram alone cannot see). Background is reduced by keeping the central
+    60 % of the width and skipping the head and feet.
+    """
     if crop.size == 0:
-        return np.zeros(2 * 16 * 8, np.float32)
-    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
-    h = hsv.shape[0]
+        return np.zeros(2 * (16 * 8 + 16), np.float32)
+    h, w = crop.shape[:2]
+    core = crop[:, int(w * 0.2): max(int(w * 0.8), int(w * 0.2) + 1)]
+    hsv = cv2.cvtColor(core, cv2.COLOR_BGR2HSV)
     feats = []
-    for part in (hsv[: h // 2], hsv[h // 2:]):
-        hist = cv2.calcHist([part], [0, 1], None, [16, 8], [0, 180, 0, 256]).flatten()
-        feats.append(hist / (hist.sum() + 1e-6))
+    for part in (hsv[int(h * 0.15): int(h * 0.5)], hsv[int(h * 0.5): int(h * 0.9)]):
+        if part.size == 0:
+            part = hsv
+        hs = cv2.calcHist([part], [0, 1], None, [16, 8], [0, 180, 0, 256]).flatten()
+        v = cv2.calcHist([part], [2], None, [16], [0, 256]).flatten()
+        feats.append(0.5 * hs / (hs.sum() + 1e-6))
+        feats.append(0.5 * v / (v.sum() + 1e-6))
     return np.concatenate(feats).astype(np.float32)
 
 
@@ -92,6 +104,51 @@ class Embedder:
             t = torch.from_numpy(np.ascontiguousarray(x)).to(self.device).permute(0, 3, 1, 2).float() / 255.0
             f = self.model((t - self.mean) / self.std)
             return torch.nn.functional.normalize(f, dim=1).cpu().numpy().astype(np.float32)
+
+
+def _iou(a, b) -> float:
+    iw = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+    ih = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    inter = iw * ih
+    return inter / ((a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter + 1e-9)
+
+
+def static_objects(hits: list[dict], series: list[dict], settings: Settings, W: int, H: int) -> list[dict]:
+    """Cluster weak bag detections by position; keep those that persist (noise does not stay in one place).
+
+    Each surviving cluster becomes a track (id >= 100000) with one row per analysis sample between its first and
+    last sighting, using the cluster's median box.
+    """
+    cam = CameraPath(pd.DataFrame(series))
+
+    clusters: list[dict] = []
+    for h in sorted(hits, key=lambda x: x["t"]):
+        # compare positions in the scene (reference frame, normalised), not on the shaking image
+        (rx1, rx2), (ry1, ry2) = cam.to_ref([h["t"], h["t"]], [h["x1"] / W, h["x2"] / W], [h["y1"] / H, h["y2"] / H])
+        h = dict(h, x1=float(rx1), x2=float(rx2), y1=float(ry1), y2=float(ry2))
+        box = (h["x1"], h["y1"], h["x2"], h["y2"])
+        best = max(clusters, key=lambda c: _iou(c["box"], box), default=None)
+        if best is not None and _iou(best["box"], box) > 0.25 and h["t"] - best["last"] <= 6.0:
+            best["hits"].append(h)
+            best["last"] = h["t"]
+            best["box"] = tuple(np.median([[x["x1"], x["y1"], x["x2"], x["y2"]] for x in best["hits"]], axis=0))
+        else:
+            clusters.append({"box": box, "last": h["t"], "hits": [h]})
+    rows, tid = [], 100000
+    for c in clusters:
+        first, last = c["hits"][0]["t"], c["last"]
+        if last - first < settings.static_min_seconds or len(c["hits"]) < 6:
+            continue
+        cls = pd.Series([x["cls"] for x in c["hits"]]).mode().iloc[0]
+        conf = float(np.median([x["conf"] for x in c["hits"]]))
+        x1, y1, x2, y2 = c["box"]
+        for s in series:
+            if first <= s["t"] <= last:  # back to this frame's image coordinates
+                (fx1, fx2), (fy1, fy2) = cam.from_ref([s["t"], s["t"]], [x1, x2], [y1, y2])
+                rows.append({"t": s["t"], "frame": s["frame"], "track": tid, "cls": cls, "conf": round(max(conf, 0.45), 3),
+                             "x1": float(fx1) * W, "y1": float(fy1) * H, "x2": float(fx2) * W, "y2": float(fy2) * H})
+        tid += 1
+    return rows
 
 
 # ----------------------------------------------------------------------------- main pass
@@ -138,7 +195,17 @@ def run_perception(video: str | Path, out_dir: Path, settings: Settings, progres
         cv2.fillPoly(m, [np.array([[x * small_w, y * small_h] for x, y in z.points], np.int32)], 1)
         masks[z.name] = m.astype(bool)
 
+    # reference frame for camera-shift compensation = the frame zones are drawn on (t = 1 s)
+    rc = cv2.VideoCapture(str(video))
+    rc.set(cv2.CAP_PROP_POS_MSEC, min(1000.0, meta.duration * 500))
+    okr, ref_frame = rc.read()
+    rc.release()
+    registrar = Registrar(ref_frame if okr else None)
+
     rows, series = [], []
+    static_hits: list[dict] = []  # sensitive bag detections, twice per second (left-object detection)
+    static_every = max(1, int(round(meta.sample_fps / 2)))
+    BAG_IDS = [k for k, v in TRACK_CLASSES.items() if v in ("backpack", "handbag", "suitcase")]
     feats: dict[int, dict] = {}
     best_thumb: dict[int, float] = {}
     prev_small = None
@@ -173,12 +240,23 @@ def run_perception(video: str | Path, out_dir: Path, settings: Settings, progres
             for name in masks:
                 rec[f"act::{name}"] = 0.0
         prev_small = small
+        # camera registration (hand-held footage): this frame -> reference frame
+        rec.update({k: round(v, 5) for k, v in zip(CAM_COLS, registrar.register(frame))})
         series.append(rec)
 
         if settings.captions_every > 0 and t >= next_keyframe:
             kf = cv2.resize(frame, (640, int(640 * meta.height / max(meta.width, 1))))
             cv2.imwrite(str(out_dir / "keyframes" / f"{t:09.2f}.jpg"), kf, [cv2.IMWRITE_JPEG_QUALITY, 80])
             next_keyframe = t + settings.captions_every
+
+        # ---- sensitive pass for small, still objects (bags left behind)
+        if (idx // meta.stride) % static_every == 0:
+            r2 = model.predict(frame, conf=settings.static_conf, imgsz=settings.imgsz, classes=BAG_IDS, verbose=False,
+                               device=device)[0]
+            for (x1, y1, x2, y2), c, cf in zip(r2.boxes.xyxy.cpu().numpy(), r2.boxes.cls.int().cpu().numpy(),
+                                               r2.boxes.conf.cpu().numpy()):
+                static_hits.append({"t": round(t, 3), "frame": idx, "cls": TRACK_CLASSES.get(int(c), str(c)),
+                                    "conf": float(cf), "x1": float(x1), "y1": float(y1), "x2": float(x2), "y2": float(y2)})
 
         # ---- detection + tracking
         res = model.track(frame, persist=True, tracker=str(tracker), conf=settings.conf, imgsz=settings.imgsz,
@@ -222,6 +300,7 @@ def run_perception(video: str | Path, out_dir: Path, settings: Settings, progres
         idx += 1
     cap.release()
 
+    rows += static_objects(static_hits, series, settings, meta.width, meta.height)
     pd.DataFrame(rows, columns=["t", "frame", "track", "cls", "conf", "x1", "y1", "x2", "y2"]).to_csv(
         out_dir / "detections.csv", index=False)
     pd.DataFrame(series).to_csv(out_dir / "series.csv", index=False)

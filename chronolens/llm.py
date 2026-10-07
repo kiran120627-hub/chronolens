@@ -99,11 +99,10 @@ class LLM:
         path = self.cache_dir / f"{key}.json"
         if self.cache and path.exists():
             data = json.loads(path.read_text(encoding="utf-8"))
-            # an answer produced by a fallback model is only reused while the main model is unavailable
-            if data.get("model") == self.model or self.model in self.exhausted:
-                with self._lock:
-                    self.cache_hits += 1
-                return data["text"]
+            # always replay a saved answer (instant, works offline); answers are still cross-checked downstream
+            with self._lock:
+                self.cache_hits += 1
+            return data["text"]
         if not self.configured:
             raise LLMError("No LLM API key configured. Set LLM_API_KEY in .env (see .env.example).")
         primary, last_err = self.model, None
@@ -161,7 +160,7 @@ class LLM:
     def _post(self, url: str, payload: dict, headers: dict) -> dict:
         req = urllib.request.Request(url, data=json.dumps(payload).encode(), method="POST",
                                      headers={"content-type": "application/json", **headers})
-        with urllib.request.urlopen(req, timeout=240) as r:
+        with urllib.request.urlopen(req, timeout=60) as r:
             return json.loads(r.read().decode())
 
     @staticmethod

@@ -11,11 +11,13 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1  # noqa: F401  (report preview)
 
 from chronolens.config import Settings, Zone, fmt_t
 from chronolens.llm import LLM
 from chronolens.pipeline import PALETTE, analyze, export_clip, frame_at
 from chronolens.qa import ask
+from chronolens.report import build_report, report_filename
 
 ROOT = Path(__file__).resolve().parent
 SAMPLE = ROOT / "data" / "videos" / "warehouse_sim.mp4"
@@ -192,6 +194,7 @@ ss = st.session_state
 ss.setdefault("seek", 0.0)
 ss.setdefault("qa", None)
 ss.setdefault("analysis", None)
+ss.setdefault("history", [])
 
 
 # ----------------------------------------------------------------------------- helpers
@@ -349,7 +352,7 @@ with st.sidebar:
     if ss.get("zones_for") != str(video):
         ss.zones = default_zones(video)
         ss.zones_for = str(video)
-        ss.analysis, ss.qa = None, None
+        ss.analysis, ss.qa, ss.history = None, None, []
 
     st.markdown('<div class="cl-label">Zones</div>', unsafe_allow_html=True)
     rev = ss.get("zone_rev", 0)
@@ -454,8 +457,8 @@ st.markdown('<div class="cl-stats">' + "".join(
     f'<div class="cl-stat"><div class="l">{lbl}</div><div class="v">{val}<small>{unit}</small></div></div>'
     for lbl, val, unit in stats) + "</div>", unsafe_allow_html=True)
 
-tab_ask, tab_tl, tab_ids, tab_ev, tab_zones, tab_bench = st.tabs(
-    ["Investigate", "Timeline", "Identities", "Event log", "Zones", "Benchmark"])
+tab_ask, tab_tl, tab_ids, tab_ev, tab_zones, tab_rep, tab_bench = st.tabs(
+    ["Investigate", "Timeline", "Identities", "Event log", "Zones", "Report", "Benchmark"])
 
 with tab_ask:
     left, right = st.columns([1.45, 1], gap="large")
@@ -481,6 +484,7 @@ with tab_ask:
             ss.question = q
             with st.spinner("Querying the event log"):
                 ss.qa = ask(a, q.strip(), llm, mode="offline" if mode == "Offline" else "auto")
+            ss.history = [h for h in ss.history if h.question != ss.qa.question] + [ss.qa]
             if ss.qa.timestamps:
                 seek(ss.qa.timestamps[0])
             st.rerun()
@@ -593,6 +597,20 @@ with tab_ev:
 with tab_zones:
     section("Zones", "area zones update instantly on re-analysis; activity zones re-run tracking")
     draw_zones_ui(video, "results")
+
+with tab_rep:
+    section("Incident report", "key findings, every question asked with evidence, full event log")
+    c1, c2 = st.columns([3, 1], vertical_alignment="bottom")
+    c1.caption(f"{len(ss.history)} question(s) from this session will be included. Open the file in a browser and "
+               "use Print → Save as PDF for a PDF.")
+    include = c2.toggle("Evidence frames", value=True)
+    if st.button("Generate report", type="primary"):
+        with st.spinner("Building the report"):
+            ss.report_html = build_report(a, video.name, ss.history, include_frames=include)
+    if ss.get("report_html"):
+        st.download_button("Download incident report (HTML)", ss.report_html, file_name=report_filename(video.name),
+                           mime="text/html", use_container_width=True)
+        st.components.v1.html(ss.report_html, height=900, scrolling=True)
 
 with tab_bench:
     rep = ROOT / "eval" / "REPORT.md"

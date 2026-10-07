@@ -150,9 +150,33 @@ signature, and vision-model verification of grey-zone re-identifications.
 * **Ghost filters:** short low-confidence tracks, duplicate boxes on one person, faint "people" inside vehicles and
   held objects are removed.
 
+## Business model
+
+**The problem we sell against:** when something happens on camera, someone has to scrub through hours of CCTV
+to find it. ChronoLens turns footage into a searchable, timestamped timeline of events, so an investigator asks
+*"Who entered the restricted area?"*, *"What happened before the alarm?"* or *"How many times did this happen?"*
+and gets the exact moment, the people or objects involved, and the evidence, in seconds.
+
+**Customers:** factories and manufacturing plants, warehouses and logistics, construction sites, retail stores,
+schools and colleges, and security service companies.
+
+| revenue stream | what the customer gets | status in this prototype |
+|---|---|---|
+| **SaaS subscription** (monthly / annual, priced per camera and hours analysed) | upload or connect footage, ask questions, timeline, identities, event log | working (single camera, uploaded video) |
+| **Incident reports** (included in higher tiers, or per report) | one-click report: key findings, every question with timestamps and evidence frames, full event log | **working:** *Report* tab, printable to PDF |
+| **Real-time alerts** (add-on) | notifications for restricted-area entry, left-behind objects, loitering, machine stops, alarms | event engine exists; live-stream input and notifications are roadmap |
+| **Enterprise** | many cameras, API integration, on-premise / private deployment (footage never leaves the site), custom detectors | runs fully on a local GPU today; API and multi-camera are roadmap |
+
+**Why customers would trust it:** every answer cites timestamped events and evidence, a rule engine cross-checks the
+AI, and the system says *"not observed"* instead of guessing. An incident report is only useful if it holds up.
+
+**Positioning:** we don't just record what happened. We understand what happened, when it happened, and what happened
+before and after.
+
 ## Scope note
 
-**Implemented (MVP + advanced):** GPU detection and tracking · re-identification across occlusion and re-entry with
+**Implemented (MVP + advanced):** one-click incident reports (findings, Q&A with evidence frames, event log) ·
+GPU detection and tracking · re-identification across occlusion and re-entry with
 vision-model verification · camera registration for hand-held footage · left-object detection with attribution ·
 deterministic event engine (12 event types + audio) · click-to-draw area/activity zones · LLM temporal QA with
 executed, validated queries, cited evidence and a rule-engine cross-check · offline rule engine · "not observed"
@@ -179,6 +203,7 @@ app.py                       Streamlit UI (Investigate · Timeline · Identities
 chronolens/camera.py         camera registration for hand-held footage (ORB + RANSAC)
 chronolens/audio.py          audio events (loud sounds, alarm-like tones)
 chronolens/offline.py        deterministic rule engine (offline answers + cross-check)
+chronolens/report.py         incident report generator (printable HTML)
 chronolens/perception.py     YOLO11 + BoT-SORT pass, appearance features, motion signals
 chronolens/reid.py           tracklet linking into identities
 chronolens/events.py         deterministic event engine

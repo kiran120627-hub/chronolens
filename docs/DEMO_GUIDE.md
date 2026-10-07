@@ -40,7 +40,13 @@
 > look-alike, a machine that stops twice, an alarm. Scored with your judging rule, ChronoLens gets **13 out of 13**.
 > With the internet off, the rule engine alone also gets **13/13**."
 
-**2:35 — Trust + close (25 s)**
+**2:30 — The product (20 s)** (**Report** tab → **Generate report**)
+> "Who pays for this? Factories, warehouses, construction sites, retail, colleges and security companies. Today a
+> person spends hours scrubbing CCTV after an incident. We turn the footage into a searchable timeline. We'd sell it
+> as a subscription per camera, with alerts and enterprise plans on top. And here's a paid feature that already
+> works: one click gives a complete incident report, with findings, every question, timestamps and evidence frames."
+
+**2:50 — Trust + close (20 s)**
 > "Every answer cites event IDs, timestamps, an evidence frame and a 6-second clip, plus a confidence score and
 > whether the rule engine agreed. Accurate times, persistent identities, evidence for every claim, and an honest
 > 'not observed'."
@@ -102,6 +108,15 @@ cached, so questions afterwards are instant.
 Single camera only (no cross-camera re-ID); identity for very small, distant people relies on the vision-model check;
 actions beyond movement, zones, objects and sounds need the optional VLM captions; a camera that walks far away
 from the reference view loses zone registration.
+
+**Q: How would you make money? Who is the customer?**
+Factories, warehouses, construction, retail, colleges and security companies, who today pay people to search CCTV.
+We'd sell a subscription per camera, add-ons for real-time alerts and incident reports, and enterprise plans with
+many cameras, an API and on-premise deployment, so footage never leaves the site. The report feature already works.
+
+**Q: Why would they trust an AI for incidents?**
+Because every answer is backed by timestamped events and evidence frames, it's cross-checked by a rule engine, and
+it says "not observed" instead of guessing. A report that can't be verified is useless; ours can be.
 
 **Q: Which parts did you build vs. use?**
 Used: YOLO11 + BoT-SORT (ultralytics), ResNet-18 weights, OpenCV ORB/RANSAC, Gemini/Claude API, Streamlit. Built:

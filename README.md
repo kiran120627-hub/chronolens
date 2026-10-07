@@ -108,7 +108,38 @@ The 100-second benchmark video is analysed in about 30 s on an RTX 5070 Laptop G
 
 Full tables: `eval/REPORT.md` (hybrid), `eval/REPORT_offline.md`, `eval/REPORT_llm_only.md`.
 
+### Real-world validation: hand-held phone footage
+
+Three ~1-minute clips filmed in a college corridor on a hand-held phone (478×850 portrait, compressed, people
+about 40–260 px tall, a 30 px bag on the floor, the phone moving and even zooming). The recordings show real
+people, so they are kept out of this public repository; their saved zones are in `data/videos/zones.json` and the
+answers in `eval/real_clips_results.json`. Cross-checked mode, all answers verified against the footage:
+
+| clip | question | ChronoLens | ✓ |
+|---|---|---|---|
+| bag | Was any bag left behind? Who left it, how long untouched? | B3 left by P1 at 0:15.0, untouched 28.8 s | ✅ |
+| bag | Did the person who left the bag come back for it? | yes, at 0:42.4 (re-identified after 26 s, VLM-confirmed 0.95) | ✅ |
+| bag | How many different people appear? | 1 | ✅ |
+| door | Who stood at the restricted door, and for how long? | P2 from 0:17.2, 8.4 s | ✅ |
+| door | Did the first person stop at the restricted door? | no (P1 walked past) | ✅ |
+| door | How many different people appear? | 2 | ✅ |
+| corridor | Who stood still for more than 20 seconds? | P2, 0:17.4–0:51.9 | ✅ |
+| corridor | Did the first person come back later? | yes, at 0:59.1 (after 49 s away) | ✅ |
+| corridor | When did a dog run across the corridor? | not observed | ✅ |
+
+All nine LLM answers agreed with the deterministic rule engine. What it took to get there (and is now general):
+camera registration for hand-held footage, persistence-validated left-object detection, a brightness-aware clothing
+signature, and vision-model verification of grey-zone re-identifications.
+
 ### Reliability features
+* **Camera registration:** every frame is registered to the zone-drawing frame (ORB features + RANSAC similarity
+  transform: translation, zoom, rotation). Zones, stillness and left objects are evaluated in scene coordinates;
+  camera-induced motion and exposure jumps are not reported as events. A fixed camera measures as exactly static.
+* **Re-identification you can audit:** appearance (CNN + torso/legs colour-and-brightness signature) plus physical
+  plausibility; a "clearly best" rule only applies when there is a real competitor; grey-zone pairs are checked by a
+  vision-language model on the two best snapshots (max 8 checks per video). Doubtful cases stay separate.
+* **Left-behind objects:** a sensitive bag pass twice per second, kept only if a detection persists in the same scene
+  position for 5+ s; "left by" = nearest person when it appeared; items inside a person's box count as held.
 * **Cross-check:** when the deterministic rule engine also understands a question, its answer is compared with the
   LLM's (values and key timestamps). If they disagree, the evidence-backed rule answer is shown and the disagreement
   is reported. "Not observed" from the LLM is overridden when the rule engine finds supporting events.
@@ -116,34 +147,38 @@ Full tables: `eval/REPORT.md` (hybrid), `eval/REPORT_offline.md`, `eval/REPORT_l
 * **Model fallback:** HTTP 503/429 (overload / free-tier daily quota) switches across several models automatically,
   and responses are cached, so a live demo never stalls.
 * **Audio events:** loud sounds and alarm-like tones (sirens, beepers) from the soundtrack, with an adaptive threshold.
-* **Noise filters:** tracks that are both short (< 3 s) and low-confidence are dropped (reflections, faint shapes
-  behind glass).
+* **Ghost filters:** short low-confidence tracks, duplicate boxes on one person, faint "people" inside vehicles and
+  held objects are removed.
 
 ## Scope note
 
-**Implemented (MVP + advanced):** click-to-draw zones (box or lasso on the frame) · per-answer evidence clips
-(±3 s, playable and downloadable) · audio events · offline rule engine + LLM cross-check · GPU detection and tracking · re-identification across occlusion and re-entry ·
-deterministic event engine (11 event types) · configurable area/activity zones · LLM temporal QA with
-executed, validated queries and cited evidence · "not observed" refusals · annotated video export · interactive
-timeline · identity gallery with re-ID decisions · event log with seek · ground-truth benchmark + scorer ·
-optional VLM keyframe captions.
+**Implemented (MVP + advanced):** GPU detection and tracking · re-identification across occlusion and re-entry with
+vision-model verification · camera registration for hand-held footage · left-object detection with attribution ·
+deterministic event engine (12 event types + audio) · click-to-draw area/activity zones · LLM temporal QA with
+executed, validated queries, cited evidence and a rule-engine cross-check · offline rule engine · "not observed"
+refusals · per-answer evidence frames and clips · annotated video · timeline · identity gallery with re-ID decisions ·
+event log with seek · ground-truth benchmark + scorer · real-footage validation · optional VLM keyframe captions.
 
-**Stretch / limitations:** single camera per analysis (no cross-camera re-ID); moving-camera footage is handled by
-BoT-SORT's camera-motion compensation for tracking, but zones are fixed in image coordinates; actions outside COCO
-classes rely on optional VLM captions; re-ID uses generic ImageNet features (a dedicated person re-ID model would be
-stronger); audio events are not analysed.
+**Limitations:** single camera per analysis (no cross-camera re-ID); identity for very small, distant people leans on
+the vision-model check; actions beyond movement, zones, objects and sounds need the optional VLM captions; a camera
+that travels far from the reference view loses zone registration; a dedicated person re-ID network would be stronger
+than generic ImageNet features.
 
 ## Technologies, models and resources (declared)
 * **Ultralytics YOLO11** (detection; segmentation only to build the synthetic benchmark), BoT-SORT tracker
   (bundled with ultralytics), **PyTorch / torchvision ResNet-18** (ImageNet weights) for appearance embeddings.
-* OpenCV, NumPy, pandas, imageio-ffmpeg (H.264 encoding), Streamlit, Plotly.
-* LLM for question answering: Anthropic Claude (default) or any OpenAI-compatible model, via a dependency-free client.
+* OpenCV (incl. ORB features + RANSAC for camera registration), NumPy, pandas, imageio-ffmpeg (H.264), Streamlit, Plotly.
+* LLM for question answering and re-ID verification: Google Gemini (used in testing) or Anthropic Claude / any
+  OpenAI-compatible model, via a dependency-free client.
 * Sample images `bus.jpg` from the ultralytics package (AGPL-3.0 assets) are used to build the synthetic video.
 * AI coding assistants were used during development. The team reviewed and understands the code.
 
 ## Layout
 ```
-app.py                       Streamlit UI (Ask · Timeline · Identities · Event log · Benchmark)
+app.py                       Streamlit UI (Investigate · Timeline · Identities · Event log · Zones · Benchmark)
+chronolens/camera.py         camera registration for hand-held footage (ORB + RANSAC)
+chronolens/audio.py          audio events (loud sounds, alarm-like tones)
+chronolens/offline.py        deterministic rule engine (offline answers + cross-check)
 chronolens/perception.py     YOLO11 + BoT-SORT pass, appearance features, motion signals
 chronolens/reid.py           tracklet linking into identities
 chronolens/events.py         deterministic event engine

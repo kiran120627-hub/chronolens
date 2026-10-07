@@ -1,0 +1,112 @@
+{
+  "clip1": [
+    {
+      "q": "Was any bag left behind? Who left it, and how long was it untouched?",
+      "a": "Yes, a bag (B3) was left behind by P1 at 0:15.0 and remained untouched for 28.8s.",
+      "status": "answered",
+      "engine": "LLM planner",
+      "crosscheck": "agrees",
+      "ts": [
+        15.0
+      ]
+    },
+    {
+      "q": "Did the person who left the bag come back for it? When?",
+      "a": "Yes, the person (P1) who left the bag came back for it at 42.4s and interacted with it at 43.8s.",
+      "status": "answered",
+      "engine": "LLM planner",
+      "crosscheck": "agrees",
+      "ts": [
+        42.41,
+        43.8,
+        15.0
+      ]
+    },
+    {
+      "q": "How many different people appear in the video?",
+      "a": "1 different person appears in the video (P1), first entering at 0:07.5 (E003) and last leaving at 0:48.7 (E018).",
+      "status": "answered",
+      "engine": "LLM planner",
+      "crosscheck": "agrees",
+      "ts": [
+        7.5,
+        8.9,
+        11.7,
+        15.0,
+        16.4,
+        42.41,
+        43.8,
+        48.7
+      ]
+    }
+  ],
+  "clip2": [
+    {
+      "q": "Who stood at the restricted door, and for how long?",
+      "a": "P2 stood at the Restricted door for 8.4s, entering at 0:17.2 (events: E008, E009, E012).",
+      "status": "answered",
+      "engine": "LLM planner",
+      "crosscheck": "agrees",
+      "ts": [
+        17.2,
+        17.2,
+        25.59
+      ]
+    },
+    {
+      "q": "Did the first person stop at the restricted door?",
+      "a": "No, the first person (P1) did not stop at the restricted door. P1 entered at 3.1s (E001), interacted with a backpack until exiting the view at 7.9s (E006), without visiting the restricted door zone. It was a later person (P2) who entered the Restricted door zone at 17.2s (E009).",
+      "status": "answered",
+      "engine": "LLM planner",
+      "crosscheck": "agrees",
+      "ts": [
+        3.1,
+        7.9,
+        17.2
+      ]
+    },
+    {
+      "q": "How many different people appear in the video?",
+      "a": "Yes, 2 different people appear in the video (P1, P2): P1 starting at 0:03.1, P2 starting at 0:12.5.",
+      "status": "answered",
+      "engine": "LLM planner",
+      "crosscheck": "agrees",
+      "ts": [
+        3.1,
+        12.5
+      ]
+    }
+  ],
+  "clip3": [
+    {
+      "q": "Who stood still for more than 20 seconds, and when?",
+      "a": "P2 stood still from 0:17.4 to 0:51.9 for 34.5 seconds.",
+      "status": "answered",
+      "engine": "LLM planner",
+      "crosscheck": "agrees",
+      "ts": [
+        17.39,
+        51.87
+      ]
+    },
+    {
+      "q": "Did the first person who appeared come back later? If so, when?",
+      "a": "Yes, the first person (P1) appeared initially at 0:04.1 and came back later at 0:59.1.",
+      "status": "answered",
+      "engine": "LLM planner",
+      "crosscheck": "agrees",
+      "ts": [
+        59.06,
+        4.1
+      ]
+    },
+    {
+      "q": "When did a dog run across the corridor?",
+      "a": "No dog running across the corridor was observed in the video (looked for dog or animal detections).",
+      "status": "not_observed",
+      "engine": "LLM planner",
+      "crosscheck": "",
+      "ts": []
+    }
+  ]
+}

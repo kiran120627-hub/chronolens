@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 820" font-family="Segoe UI, Inter, Arial, sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8a8d93"/>
+    </marker>
+    <style>
+      .box{fill:#191b1f;stroke:#2c2f35;stroke-width:1.5}
+      .gpu{fill:#1d1a14;stroke:#d6a250;stroke-width:1.5}
+      .ai{fill:#141a1f;stroke:#7aa2c7;stroke-width:1.5}
+      .rule{fill:#151c17;stroke:#6dbb8f;stroke-width:1.5}
+      .t{fill:#e8e6e1;font-size:17px;font-weight:600}
+      .s{fill:#9a9ca1;font-size:13px}
+      .f{fill:#d6a250;font-size:12px;font-family:Consolas, monospace}
+      .lab{fill:#64676d;font-size:12px;letter-spacing:1.5px;font-weight:600}
+      .ln{stroke:#8a8d93;stroke-width:1.8;fill:none;marker-end:url(#ar)}
+      .dash{stroke:#6dbb8f;stroke-width:1.8;fill:none;stroke-dasharray:6 5;marker-end:url(#ar)}
+    </style>
+  </defs>
+  <rect width="1280" height="820" fill="#0d0e10"/>
+  <text x="40" y="52" fill="#e8e6e1" font-size="28" font-weight="700">ChronoLens — system architecture</text>
+  <text x="40" y="80" fill="#9a9ca1" font-size="15">Video in → timestamped, evidence-backed answers out. The AI never generates a timestamp.</text>
+
+  <!-- column labels -->
+  <text x="40" y="128" class="lab">INPUT</text>
+  <text x="250" y="128" class="lab">PERCEPTION · GPU</text>
+  <text x="640" y="128" class="lab">UNDERSTANDING</text>
+  <text x="990" y="128" class="lab">ANSWERING</text>
+
+  <!-- input -->
+  <rect x="40" y="150" width="170" height="96" rx="10" class="box"/>
+  <text x="58" y="182" class="t">Video</text>
+  <text x="58" y="204" class="s">CCTV / phone clip</text>
+  <text x="58" y="224" class="s">+ audio track</text>
+  <rect x="40" y="280" width="170" height="96" rx="10" class="box"/>
+  <text x="58" y="312" class="t">Zones</text>
+  <text x="58" y="334" class="s">drawn on the frame:</text>
+  <text x="58" y="354" class="s">restricted area, machine</text>
+  <rect x="40" y="410" width="170" height="96" rx="10" class="box"/>
+  <text x="58" y="442" class="t">Question</text>
+  <text x="58" y="464" class="s">"What happened right</text>
+  <text x="58" y="484" class="s">before the alarm?"</text>
+
+  <!-- perception -->
+  <rect x="250" y="150" width="340" height="96" rx="10" class="gpu"/>
+  <text x="268" y="182" class="t">Detect &amp; track</text>
+  <text x="268" y="204" class="s">YOLO11 + BoT-SORT (Kalman, Hungarian), 10×/s</text>
+  <text x="268" y="226" class="f">perception.py</text>
+  <rect x="250" y="262" width="165" height="96" rx="10" class="gpu"/>
+  <text x="266" y="294" class="t">Camera fix</text>
+  <text x="266" y="316" class="s">ORB + RANSAC</text>
+  <text x="266" y="338" class="f">camera.py</text>
+  <rect x="425" y="262" width="165" height="96" rx="10" class="gpu"/>
+  <text x="441" y="294" class="t">Audio</text>
+  <text x="441" y="316" class="s">FFT: alarms, bangs</text>
+  <text x="441" y="338" class="f">audio.py</text>
+
+  <!-- understanding -->
+  <rect x="640" y="150" width="300" height="96" rx="10" class="box"/>
+  <text x="658" y="182" class="t">Re-identification</text>
+  <text x="658" y="204" class="s">ResNet-18 + clothing colour; vision model</text>
+  <text x="658" y="224" class="s">checks unclear cases · </text><text x="808" y="224" class="f">reid.py</text>
+  <rect x="640" y="262" width="300" height="140" rx="10" class="rule"/>
+  <text x="658" y="294" class="t">Event engine (rule-based)</text>
+  <text x="658" y="316" class="s">zone entry · stood still · bag left · re-appear</text>
+  <text x="658" y="336" class="s">machine stop + learned rhythm · alarm · sound</text>
+  <text x="658" y="356" class="s">every event has an exact start/end time</text>
+  <text x="658" y="384" class="f">events.py</text>
+  <rect x="640" y="420" width="300" height="86" rx="10" class="box"/>
+  <text x="658" y="452" class="t">Timestamped event log</text>
+  <text x="658" y="474" class="s">the video's "memory" · cached on disk</text>
+  <text x="658" y="494" class="f">pipeline.py</text>
+
+  <!-- answering -->
+  <rect x="990" y="150" width="250" height="110" rx="10" class="ai"/>
+  <text x="1008" y="182" class="t">AI planner (Gemini)</text>
+  <text x="1008" y="204" class="s">writes a small query over</text>
+  <text x="1008" y="224" class="s">the event log, which we run</text>
+  <text x="1008" y="246" class="f">qa.py · llm.py</text>
+  <rect x="990" y="290" width="250" height="110" rx="10" class="rule"/>
+  <text x="1008" y="322" class="t">Rule engine</text>
+  <text x="1008" y="344" class="s">answers independently;</text>
+  <text x="1008" y="364" class="s">works offline</text>
+  <text x="1008" y="386" class="f">offline.py</text>
+  <rect x="990" y="430" width="250" height="76" rx="10" class="box"/>
+  <text x="1008" y="462" class="t">Cross-check</text>
+  <text x="1008" y="484" class="s">disagree → evidence wins</text>
+
+  <!-- arrows -->
+  <path d="M210 198 L246 198" class="ln"/>
+  <path d="M210 328 L246 316" class="ln"/>
+  <path d="M590 198 L636 198" class="ln"/>
+  <path d="M507 246 L507 258" class="ln"/>
+  <path d="M790 246 L790 258" class="ln"/>
+  <path d="M590 310 L636 310" class="ln"/>
+  <path d="M790 402 L790 416" class="ln"/>
+  <path d="M940 463 Q965 463 965 300 Q965 205 986 205" class="ln"/>
+  <path d="M940 470 Q975 470 975 360 L986 345" class="ln"/>
+  <path d="M210 458 Q600 560 980 300" class="ln" stroke-dasharray="2 4"/>
+  <path d="M1115 260 L1115 286" class="dash"/>
+  <path d="M1115 400 L1115 426" class="dash"/>
+
+  <!-- output band -->
+  <rect x="40" y="560" width="1200" height="200" rx="12" fill="#141518" stroke="#2c2f35"/>
+  <text x="64" y="596" class="lab">OUTPUT · STREAMLIT APP (app.py)</text>
+  <path d="M1115 506 L1115 556" class="ln"/>
+  <g>
+    <rect x="64" y="616" width="215" height="118" rx="10" class="box"/>
+    <text x="82" y="648" class="t">Answer</text>
+    <text x="82" y="670" class="s">with clickable timestamps</text>
+    <text x="82" y="690" class="s">→ video jumps there</text>
+    <text x="82" y="712" class="s">confidence + cross-check</text>
+    <rect x="295" y="616" width="215" height="118" rx="10" class="box"/>
+    <text x="313" y="648" class="t">Evidence</text>
+    <text x="313" y="670" class="s">frames with the people /</text>
+    <text x="313" y="690" class="s">objects highlighted,</text>
+    <text x="313" y="712" class="s">6-second clips</text>
+    <rect x="526" y="616" width="215" height="118" rx="10" class="box"/>
+    <text x="544" y="648" class="t">Timeline</text>
+    <text x="544" y="670" class="s">who was visible when,</text>
+    <text x="544" y="690" class="s">zone entries, stops,</text>
+    <text x="544" y="712" class="s">alarms on one axis</text>
+    <rect x="757" y="616" width="215" height="118" rx="10" class="box"/>
+    <text x="775" y="648" class="t">Identities</text>
+    <text x="775" y="670" class="s">each person / bag with</text>
+    <text x="775" y="690" class="s">re-ID decisions and</text>
+    <text x="775" y="712" class="s">match scores</text>
+    <rect x="988" y="616" width="228" height="118" rx="10" class="box"/>
+    <text x="1006" y="648" class="t">Incident report</text>
+    <text x="1006" y="670" class="s">key findings, every Q&amp;A</text>
+    <text x="1006" y="690" class="s">with evidence, event log</text>
+    <text x="1006" y="712" class="s">→ print to PDF</text>
+  </g>
+  <text x="40" y="796" fill="#64676d" font-size="13">Results: 13/13 on ground-truth benchmark · 9/9 on real hand-held corridor clips · 3/3 unexpected machine stops · 100 s of video in ~30 s on an RTX 5070</text>
+</svg>

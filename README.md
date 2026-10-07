@@ -20,6 +20,8 @@ made-up timestamps, which this problem scores at zero or half credit. ChronoLens
 
 ## Architecture
 
+![ChronoLens system architecture](docs/architecture.svg)
+
 ```
 video ──► [Perception: YOLO11 + BoT-SORT on GPU] ── boxes, track IDs, appearance features, motion signals
                      │

@@ -227,13 +227,34 @@ def ask_offline(a: Analysis, question: str, reason: str = "") -> QAResult:
     return _finish(a, res, out)
 
 
+LLM_DEADLINE_S = 20  # seconds before 'auto' mode answers from the rule engine instead of waiting
+
+
 def ask(a: Analysis, question: str, llm: LLM | None, max_retries: int = 2, mode: str = "auto") -> QAResult:
     """mode: 'auto' (LLM, falls back to offline rules on failure) | 'llm' | 'offline'."""
     if mode == "offline" or llm is None or not llm.configured:
         return ask_offline(a, question, "" if mode == "offline" else "no LLM configured")
     try:
-        res = _ask_llm(a, question, llm, max_retries)
-    except Exception as e:  # noqa: BLE001 - network / quota failure
+        if mode == "auto":
+            # live demos must never hang on a slow API: past the deadline, answer from the rule engine; the LLM
+            # call keeps running in the background and its answer is cached for the next time
+            from concurrent.futures import ThreadPoolExecutor
+            from concurrent.futures import TimeoutError as FutureTimeout
+
+            pool = ThreadPoolExecutor(max_workers=1)
+            fut = pool.submit(_ask_llm, a, question, llm, max_retries)
+            pool.shutdown(wait=False)
+            try:
+                res = fut.result(timeout=LLM_DEADLINE_S)
+            except FutureTimeout:
+                off = ask_offline(a, question, f"LLM slower than {LLM_DEADLINE_S}s")
+                if off.status != "error":
+                    off.crosscheck = "llm timeout"
+                    return off
+                res = fut.result(timeout=90)  # rule engine can't parse it: wait a bit longer for the LLM
+        else:
+            res = _ask_llm(a, question, llm, max_retries)
+    except Exception as e:  # noqa: BLE001 - network / quota failure / overall timeout
         if mode == "llm":
             raise
         return ask_offline(a, question, f"LLM unavailable: {str(e)[:120]}")

@@ -498,6 +498,7 @@ with tab_ask:
             if r.attempts > 1:
                 prov += f" · self-corrected {r.attempts - 1}×"
             check = {"agrees": "Agrees with rule engine",
+                     "llm timeout": "AI model slow; answered by the rule engine from the event log",
                      "overrode LLM": '<span class="cl-warn">LLM disagreed with the evidence; rule engine answer shown</span>'
                      }.get(r.crosscheck, "Not applicable")
             meta_rows = ""

@@ -179,6 +179,7 @@ st.markdown(CSS, unsafe_allow_html=True)
 SUGGESTIONS = {
     "Entry after truck": "Which person entered the restricted area after the delivery truck arrived, and when?",
     "Machine stops": "How many times did the machine stop?",
+    "Unexpected stops": "How many times did the machine stop unexpectedly?",
     "Before the alarm": "What happened right before the safety alarm went off?",
     "Return visit": "Did the first person who appeared come back later? If so, when?",
     "Loitering > 20 s": "Who stood still for more than 20 seconds, and when?",

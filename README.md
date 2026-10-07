@@ -108,6 +108,22 @@ The 100-second benchmark video is analysed in about 30 s on an RTX 5070 Laptop G
 
 Full tables: `eval/REPORT.md` (hybrid), `eval/REPORT_offline.md`, `eval/REPORT_llm_only.md`.
 
+### Learned rhythm: "how many times did the machine stop *unexpectedly*?"
+
+ChronoLens learns each machine's normal cycle from the video itself (typical gap between stops and typical stop
+length, fitted as a time grid so one early stop doesn't make the next one look late) and flags stops that come early
+or late, or last unusually long or short. `data/make_rhythm.py` renders a 3.5-minute benchmark: a press that stops
+every 30 s for 4 s, with one stop 9 s early and one lasting 10 s.
+
+| question | ChronoLens | truth |
+|---|---|---|
+| How many times did the machine stop? | 7 (all times exact) | 7 |
+| How many times did it stop unexpectedly? | 2: 1:36.1 (came 9 s early), 2:45.0 (lasted 10 s instead of ~4 s) | 96 s early, 165 s long |
+| What is the machine's normal cycle? | every 30 s for about 4 s | 30 s / 4 s |
+
+In cross-checked mode the LLM got the third question wrong; the rule engine caught the disagreement and showed the
+correct answer.
+
 ### Real-world validation: hand-held phone footage
 
 Three ~1-minute clips filmed in a college corridor on a hand-held phone (478×850 portrait, compressed, people

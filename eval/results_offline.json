@@ -28,7 +28,7 @@
       "value": null,
       "confidence": 0.92,
       "why": "subjects ['P2'] vs ['P2']; times 0:40.6, 1:06.0 vs 0:40.6",
-      "seconds": 0.0
+      "seconds": 0.1
     },
     {
       "id": "S02",
@@ -100,7 +100,7 @@
       "value": 51.68,
       "confidence": 0.88,
       "why": "value 51.68 vs 50.0; times 0:26.5, 0:29.8 vs 0:26.0",
-      "seconds": 0.0
+      "seconds": 0.1
     },
     {
       "id": "S06",

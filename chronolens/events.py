@@ -264,6 +264,21 @@ def build_events(det: pd.DataFrame, identities: pd.DataFrame, series: pd.DataFra
                     add("activity_start", end, zone=z.name, conf=0.6 + 0.4 * contrast,
                         details=f"motion in {z.name} resumes")
 
+    # ---- learned rhythm: which stops were expected and which were not
+    rhythm = {}
+    for zname in sorted({e["zone"] for e in ev if e["type"] == "activity_stop"}):
+        stops = sorted([e for e in ev if e["type"] == "activity_stop" and e["zone"] == zname], key=lambda e: e["start"])
+        r = learn_rhythm([e["start"] for e in stops], [e["duration"] for e in stops])
+        if r is None:
+            continue
+        rhythm[zname] = {k: v for k, v in r.items() if k != "verdicts"}
+        for e, v in zip(stops, r["verdicts"]):
+            e["details"] += f" · {v['label']}"
+            if v["unexpected"]:
+                add("unexpected_stop", e["start"], e["end"], zone=zname, conf=e["confidence"],
+                    details=f"unexpected stop in {zname}: {v['why']} (normal: every {r['period']:.0f}s "
+                            f"for {r['duration']:.0f}s)")
+
     # ---- sudden changes
     if len(series) > 5:
         t = series.t.to_numpy()
@@ -298,11 +313,54 @@ def build_events(det: pd.DataFrame, identities: pd.DataFrame, series: pd.DataFra
         ev = [e for e in ev if e["type"] != "sudden_change"] + merged
 
     df = pd.DataFrame(ev, columns=[c for c in COLUMNS if c != "id"])
-    order = {"object_left": 0, "enter_view": 0, "reappear": 1, "zone_enter": 2, "in_zone": 3, "interaction": 4, "stationary": 5,
+    order = {"unexpected_stop": 0, "object_left": 0, "enter_view": 0, "reappear": 1, "zone_enter": 2, "in_zone": 3, "interaction": 4, "stationary": 5,
              "untouched": 6, "activity_stop": 7, "activity_start": 8, "sudden_change": 9, "zone_exit": 10,
              "occluded": 11, "exit_view": 12, "caption": 13}
     df["_o"] = df["type"].map(order).fillna(99)
     df = df.sort_values(["start", "_o", "subject"]).drop(columns="_o").reset_index(drop=True)
     df.insert(0, "id", [f"E{i + 1:03d}" for i in range(len(df))])
     df["when"] = df.apply(lambda r: fmt_t(r.start) if r.duration == 0 else f"{fmt_t(r.start)}–{fmt_t(r.end)}", axis=1)
-    return df, {"segments": segments, "activity": activity_summary}
+    return df, {"segments": segments, "activity": activity_summary, "rhythm": rhythm}
+
+
+def learn_rhythm(starts: list[float], durations: list[float], min_events: int = 4) -> dict | None:
+    """Learn a repeating cycle from event start times and flag the events that break it.
+
+    period   = median gap between consecutive starts
+    phase    = robust offset so that start_k ~ phase + n_k * period (n_k = cycle number); fitting a grid rather
+               than comparing neighbours means one early event does not make the next one look late
+    duration = median duration
+    An event is unexpected if it is off-grid by more than max(20 % of the period, 3 s), or lasts more than 1.8x
+    (or less than 0.4x) the usual duration.
+    """
+    if len(starts) < min_events:
+        return None
+    s = np.asarray(starts, float)
+    d = np.asarray(durations, float)
+    period = float(np.median(np.diff(s)))
+    if period <= 0:
+        return None
+    phase = s[0]
+    for _ in range(3):  # refine the grid offset robustly
+        n = np.round((s - phase) / period)
+        phase = float(np.median(s - n * period))
+    n = np.round((s - phase) / period)
+    dev = s - (phase + n * period)
+    tol = max(0.2 * period, 3.0)
+    dur = float(np.median(d))
+    verdicts = []
+    for dv, du in zip(dev, d):
+        reasons = []
+        if dv < -tol:
+            reasons.append(f"came {abs(dv):.0f}s early")
+        elif dv > tol:
+            reasons.append(f"came {dv:.0f}s late")
+        if du > 1.8 * dur:
+            reasons.append(f"lasted {du:.0f}s instead of ~{dur:.0f}s")
+        elif du < 0.4 * dur:
+            reasons.append(f"lasted only {du:.0f}s instead of ~{dur:.0f}s")
+        verdicts.append({"unexpected": bool(reasons), "why": " and ".join(reasons),
+                         "label": ("UNEXPECTED: " + " and ".join(reasons)) if reasons else "on schedule"})
+    regular = int(sum(not v["unexpected"] for v in verdicts))
+    return {"period": period, "duration": dur, "events": len(s), "regular": regular,
+            "unexpected": len(s) - regular, "verdicts": verdicts}

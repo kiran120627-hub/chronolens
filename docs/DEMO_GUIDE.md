@@ -35,6 +35,11 @@
 - **clip3**, ask *"Who stood still for more than 20 seconds?"* → *"P2 from 0:17.4 to 0:51.9."*
   Then *"When did a dog run across the corridor?"* → **Not observed**. "It refuses instead of hallucinating."
 
+**1:55 — Learned rhythm (15 s)** (Recorded clips → `machine_rhythm` → *Unexpected stops*)
+> "The booklet asks how many times a machine stopped *unexpectedly*. We don't hard-code 'expected': the system
+> learns the machine's rhythm from the video (every 30 s for 4 s) and flags the 2 stops that broke it: one came
+> 9 seconds early, one lasted 10 seconds."
+
 **2:05 — Proof (30 s)** (Sample video → **Benchmark** tab)
 > "To measure accuracy we built a video with exactly scripted events: occlusion, people leaving and returning, a
 > look-alike, a machine that stops twice, an alarm. Scored with your judging rule, ChronoLens gets **13 out of 13**.
@@ -90,6 +95,11 @@ Find X's time in the event log, then the latest relevant event before it (within
 **Q: How did you detect the alarm?**
 In the benchmark, two independent signals: the audio (a narrow-band tone 29 dB above background, found with an FFT)
 and the video (a red-light / brightness spike). Both agree on 1:10.0.
+
+**Q: How do you know a stop was "unexpected"?**
+We learn the normal cycle from the video: the typical gap between stops and the typical length, fitted as a time
+grid so one early stop doesn't make the next one look late. A stop is unexpected if it's more than 20 % of the cycle
+off the grid, or lasts much longer or shorter than usual. It needs at least 4 stops to learn; with fewer, it says so.
 
 **Q: How is the machine stop detected?**
 An "activity zone" over the machine: motion energy inside it each sample, auto-calibrated running vs stopped levels,

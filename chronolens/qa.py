@@ -52,7 +52,10 @@ Tables (pandas DataFrames passed to your function)
   types: enter_view, exit_view, occluded, reappear, zone_enter, zone_exit, in_zone (interval), stationary (interval),
   untouched (interval, objects with no person contact), interaction (interval, subject=person, other=object/vehicle),
   object_left (subject=object, other=the person nearest to it when it first appeared, i.e. who left it),
-  activity_stop (interval: motion stopped inside an activity zone, e.g. a machine), activity_start,
+  activity_stop (interval: motion stopped inside an activity zone, e.g. a machine; details end with "on schedule"
+  or "UNEXPECTED: ..." once the machine's normal rhythm has been learned), activity_start,
+  unexpected_stop (a stop that broke the learned rhythm: came early/late or lasted unusually long/short; details give
+  the normal cycle) — use these for "unexpected", "unusual", "abnormal" stops,
   sudden_change (spike in motion / brightness / red light, e.g. a flashing alarm light),
   sound (from the audio track: details say "alarm-like tone / siren / beeper" or "loud sound (bang / crash / shout)"),
   caption (VLM keyframe description, if enabled)

@@ -84,6 +84,29 @@ def answer_offline(a: Analysis, question: str) -> dict | None:
         return _result(True, f"{n} different people appear: " + ", ".join(
             f"{r.id} ({fmt_t(r.first_seen)}–{fmt_t(r.last_seen)})" for r in people.itertuples()) + ".", rows, value=n)
 
+    if re.search(r"(unexpected|unusual|abnormal|irregular|unplanned|odd)", q) and re.search(r"stop|halt|paus", q):
+        rows = ev[ev.type == "unexpected_stop"]
+        allstops = ev[ev.type == "activity_stop"]
+        if not ev.details.str.contains("on schedule|UNEXPECTED").any():
+            return _result(False, f"Not enough repetitions to learn a normal rhythm ({len(allstops)} stop(s) seen; "
+                                  "at least 4 are needed), so 'unexpected' cannot be judged.", allstops)
+        msg = (f"{len(rows)} of {len(allstops)} stops were unexpected: " + "; ".join(
+            f"{fmt_t(r.start)} ({r.details.split(': ', 1)[1]})" for r in rows.itertuples()) + "."
+               if len(rows) else f"None of the {len(allstops)} stops were unexpected; all were on schedule.")
+        return _result(True, msg, rows if len(rows) else allstops, value=len(rows))
+
+    if re.search(r"normal (cycle|rhythm|pattern|schedule)|how often .*normally|usual(ly)? .*stop", q):
+        from .events import learn_rhythm
+
+        stops = ev[ev.type == "activity_stop"].sort_values("start")
+        r = learn_rhythm(list(stops.start), list(stops.duration))
+        if r is None:
+            return _result(False, f"Not enough repeated stops to learn a normal rhythm ({len(stops)} seen, 4 needed).")
+        sched = stops[stops.details.str.contains("on schedule")]
+        return _result(True, f"Normally it stops about every {r['period']:.0f}s for about {r['duration']:.0f}s "
+                             f"({r['regular']} of {r['events']} stops followed this rhythm; {r['unexpected']} did not).",
+                       sched, value=round(r["period"], 1))
+
     if re.search(r"how many times.*(stop|halt)|how often.*(stop|halt)", q):
         rows = ev[ev.type == "activity_stop"]
         return _result(True, f"It stopped {len(rows)} time(s): " + ", ".join(f"{fmt_t(r.start)}–{fmt_t(r.end)}"

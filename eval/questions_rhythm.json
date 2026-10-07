@@ -1,0 +1,105 @@
+{
+  "video": "data/videos/machine_rhythm.mp4",
+  "zones": [
+    {
+      "name": "Machine",
+      "kind": "activity",
+      "points": [
+        [
+          0.35,
+          0.18
+        ],
+        [
+          0.65,
+          0.18
+        ],
+        [
+          0.65,
+          0.72
+        ],
+        [
+          0.35,
+          0.72
+        ]
+      ]
+    }
+  ],
+  "stops": [
+    [
+      15,
+      4
+    ],
+    [
+      45,
+      4
+    ],
+    [
+      75,
+      4
+    ],
+    [
+      96,
+      4
+    ],
+    [
+      135,
+      4
+    ],
+    [
+      165,
+      10
+    ],
+    [
+      195,
+      4
+    ]
+  ],
+  "unexpected": [
+    [
+      96,
+      "came 9 s early"
+    ],
+    [
+      165,
+      "lasted 10 s instead of 4 s"
+    ]
+  ],
+  "time_tolerance": 1.5,
+  "questions": [
+    {
+      "id": "R1",
+      "question": "How many times did the machine stop?",
+      "expected": {
+        "value": 7,
+        "times": [
+          15,
+          45,
+          75,
+          96,
+          135,
+          165,
+          195
+        ]
+      }
+    },
+    {
+      "id": "R2",
+      "question": "How many times did the machine stop unexpectedly?",
+      "expected": {
+        "value": 2,
+        "times": [
+          96,
+          165
+        ]
+      }
+    },
+    {
+      "id": "R3",
+      "question": "What is the machine's normal cycle?",
+      "expected": {
+        "value": 30.0,
+        "value_tol": 3.0
+      }
+    }
+  ]
+}
